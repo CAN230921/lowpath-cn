@@ -1,8 +1,11 @@
 package detect
 
 import (
+	"io"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -37,14 +40,58 @@ func (l Library) Has(paths []string, steamDir string) bool {
 			return true
 		}
 	}
-	if steamDir != "" {
-		for _, lib := range l.Steam {
-			if _, err := os.Stat(filepath.Join(lib, steamDir)); err == nil {
-				return true
+	return len(l.SteamInstallDirs(0, steamDir)) != 0
+}
+
+// SteamInstallDirs prefers the per-AppID manifests, which know the actual
+// install directory even when the catalog's default name has changed.
+func (l Library) SteamInstallDirs(appID int, defaultDir string) []string {
+	var dirs []string
+	for _, lib := range l.Steam {
+		if appID > 0 {
+			if dir := manifestInstallDir(lib, appID); dir != "" {
+				dirs = append(dirs, dir)
+				continue
+			}
+		}
+		if defaultDir != "" {
+			if dir := filepath.Join(lib, defaultDir); isDir(dir) {
+				dirs = append(dirs, dir)
 			}
 		}
 	}
-	return false
+	return dirs
+}
+
+var appManifestField = regexp.MustCompile(`(?im)^[ \t]*"(appid|StateFlags|installdir)"[ \t]+"([^"\r\n]+)"[ \t\r]*$`)
+
+func manifestInstallDir(lib string, appID int) string {
+	id := strconv.Itoa(appID)
+	file, err := os.Open(filepath.Join(filepath.Dir(lib), "appmanifest_"+id+".acf"))
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, 64<<10))
+	if err != nil {
+		return ""
+	}
+	fields := make(map[string]string, 3)
+	for _, item := range appManifestField.FindAllStringSubmatch(string(data), 3) {
+		fields[strings.ToLower(item[1])] = item[2]
+	}
+	flags, err := strconv.ParseUint(fields["stateflags"], 10, 32)
+	const fullyInstalled = 4
+	name := fields["installdir"]
+	if fields["appid"] != id || err != nil || flags&fullyInstalled == 0 ||
+		name == "" || name == "." || !filepath.IsLocal(name) || strings.ContainsAny(name, `\/:`) {
+		return ""
+	}
+	dir := filepath.Join(lib, name)
+	if !isDir(dir) {
+		return ""
+	}
+	return dir
 }
 
 // hasWindowsPath looks for a Windows path, split by splitWindowsPath, in the

@@ -15,6 +15,7 @@ export interface Stats {
 export interface Game {
   id: string;
   name: string;
+  aliases?: string[];
   genre: string;
   color: string;
   smart: boolean;

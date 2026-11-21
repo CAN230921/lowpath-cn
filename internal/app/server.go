@@ -403,7 +403,7 @@ func (s *Server) scanInstalled() {
 	lib := detect.Library{Steam: games.SteamLibraries(), DriveC: games.WinePrefixes(), Installs: games.LauncherInstalls()}
 	inst := map[string]bool{}
 	for _, g := range s.games {
-		if lib.Has(g.Paths, g.Steam) {
+		if lib.Has(g.Paths, "") || len(lib.SteamInstallDirs(g.SteamApp, g.Steam)) != 0 {
 			inst[g.ID] = true
 		}
 	}

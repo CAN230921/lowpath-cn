@@ -202,11 +202,8 @@ func (a *artStore) exeIcon(g Game, out string) (string, error) {
 	}
 	if exe == "" {
 		roots := slicesClone(g.Paths)
-		if g.Steam != "" {
-			for _, l := range a.libs() {
-				roots = append(roots, filepath.Join(l, g.Steam))
-			}
-		}
+		library := detect.Library{Steam: a.libs()}
+		roots = append(roots, library.SteamInstallDirs(g.SteamApp, g.Steam)...)
 		names := append(slicesClone(g.IconExe), g.Processes...)
 		exe = detect.FindExe(existing(roots), names, exeSearchDepth, exeSearchLimit)
 	}

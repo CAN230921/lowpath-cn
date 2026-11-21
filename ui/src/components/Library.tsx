@@ -22,7 +22,7 @@ export function Library({ games, recent, query, selected, optimizingId, onSelect
 
   const { top, rest } = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let list = games.filter((g) => !q || g.name.toLowerCase().includes(q) || g.genre.toLowerCase().includes(q));
+    let list = games.filter((g) => !q || [g.name, g.genre, g.id, ...(g.aliases ?? [])].some((label) => label.toLowerCase().includes(q)));
     if (tab === "fav") list = list.filter((g) => g.favorite);
     if (tab === "installed") list = list.filter((g) => g.installed || g.running);
     list = [...list].sort((a, b) => a.name.localeCompare(b.name));

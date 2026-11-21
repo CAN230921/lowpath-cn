@@ -18,6 +18,7 @@ var gamesJSON []byte
 type Game struct {
 	ID        string   `json:"id"`
 	Name      string   `json:"name"`
+	Aliases   []string `json:"aliases,omitempty"` // alternate names and abbreviations for search
 	Genre     string   `json:"genre"`
 	Color     string   `json:"color"`
 	Smart     bool     `json:"smart"`
