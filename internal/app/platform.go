@@ -82,6 +82,9 @@ func elevateWording(os string) (action, hint string) {
 }
 
 func (s *Server) serviceView() serviceView {
+	if _, managed := s.net.(managedRelayDirectory); managed {
+		return serviceView{State: "unsupported"}
+	}
 	if s.inService {
 		return serviceView{State: "in_use"}
 	}

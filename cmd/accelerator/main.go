@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -31,6 +32,9 @@ var defaultGateway, defaultGatewayIP, defaultUplink string
 
 func main() {
 	if err := run(); err != nil {
+		if runtime.GOOS == "windows" && flag.Lookup("headless").Value.String() == "false" {
+			platform.NewDesktop(platform.DesktopConfig{}).ShowError("Lowpath", "无法启动加速器。\n\n"+err.Error())
+		}
 		log.Fatal(err)
 	}
 }
@@ -122,13 +126,21 @@ func run() error {
 	if !*credential && !*route {
 		login.Store = network.SystemCredentialStore()
 	}
-	svc, err := app.NewServer(app.Config{Store: store, Games: games, Network: network, Platform: plat,
-		UI: assets, ArtDir: filepath.Join(*data, "art"), Marker: capture.NewMarkerFile(filepath.Join(*data, "capture.json")), ExtraAPI: login.Mount})
+	cfg := app.Config{
+		Store: store, Games: games, Network: network, Platform: plat,
+		UI: assets, ArtDir: filepath.Join(*data, "art"),
+		Marker: capture.NewMarkerFile(filepath.Join(*data, "capture.json")), ExtraAPI: login.Mount, Quit: stop,
+	}
+	if plat.OS == "windows" && plat.Privileges.CanElevate() && !*headless && !*credential {
+		cfg.Elevate = func() error { return plat.Privileges.Relaunch(os.Args[1:]) }
+	}
+	svc, err := app.NewServer(cfg)
 	if err != nil {
 		return err
 	}
 	defer svc.Close()
 	login.StopBoost = svc.StopBoost
+	svc.Run(ctx)
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		return err

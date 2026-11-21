@@ -21,3 +21,4 @@ accounts/
 /internal/divert/bin/WinDivert.dll
 /internal/divert/bin/WinDivert64.sys
 /accelerator
+/cmd/accelerator/rsrc_windows_amd64.syso

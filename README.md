@@ -29,7 +29,11 @@ go build -o accelerator ./cmd/accelerator
 
 代理模式下，将测试程序连接到界面显示的本地 UDP 地址。该模式已在 Mac 上通过公网 MASQUE 和 AWS 验证。开发用 `-test-route` 需要管理员权限和与测试目标不同的 `-gateway-ip`，以临时 utun 主机路由接管专用测试服务器。系统路由模式仍在验收，设计范围为专用测试 IPv4 地址和指定的 UDP 端口。
 
-Windows 客户端计划复用同一套 React 界面和托管节点 API。参阅 [第三方许可](THIRD_PARTY_NOTICES.md) 获取可选的 Windows 流量捕获依赖。
+## Windows x64
+
+在 [GitHub Actions](https://github.com/CAN230921/lowpath-cn/actions/workflows/windows.yml) 打开最近一次成功的构建，下载并解压 `Lowpath-Windows-x64`，运行 `Lowpath.exe`。适用于 Windows 10/11 x64。
+
+构建预填香港托管网关，首次打开时用管理员发放的账号登录。路由模式使用内置的 WinDivert 驱动，需要 Windows 管理员权限。可直接右键以管理员身份启动，或在应用里按提示授权并重启。桌面窗口使用 WebView2，缺少运行时时会在默认浏览器打开界面。
 
 ## 部署网关与创建账号
 

@@ -1,0 +1,108 @@
+name: Windows 托管客户端
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-x64:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    env:
+      CGO_ENABLED: '0'
+      LOWPATH_BUILD_GATEWAY: https://play.canshub.space
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build the desktop UI
+        working-directory: ui
+        run: |
+          npm ci
+          if ($LASTEXITCODE -ne 0) { throw 'Installing UI dependencies failed' }
+          npm run build
+
+      - name: Fetch the official WinDivert x64 files
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'WinDivert-2.2.2-A.zip'
+          $unpack = Join-Path $env:RUNNER_TEMP 'windivert'
+          $sha256 = '63cb41763bb4b20f600b6de04e991a9c2be73279e317d4d82f237b150c5f3f15'
+          curl.exe --fail --silent --show-error --location --retry 3 --output $archive 'https://github.com/basil00/WinDivert/releases/download/v2.2.2/WinDivert-2.2.2-A.zip'
+          if ($LASTEXITCODE -ne 0) { throw 'WinDivert download failed' }
+          if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne $sha256) {
+            throw 'WinDivert archive SHA-256 mismatch'
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $unpack
+          $driver = Join-Path $unpack 'WinDivert-2.2.2-A/x64'
+          Copy-Item (Join-Path $driver 'WinDivert.dll'), (Join-Path $driver 'WinDivert64.sys') internal/divert/bin
+
+      - name: Test Windows client
+        run: go test -short ./...
+
+      - name: Build Lowpath.exe
+        run: |
+          go run github.com/tc-hib/go-winres@v0.3.3 make --in cmd/lowpath/winres/winres.json --arch amd64 --out cmd/accelerator/rsrc
+          if ($LASTEXITCODE -ne 0) { throw 'Windows resource generation failed' }
+          New-Item -ItemType Directory -Force dist/windows-x64 | Out-Null
+          go build -trimpath -ldflags "-H windowsgui -s -w -X main.defaultGateway=$env:LOWPATH_BUILD_GATEWAY" -o dist/windows-x64/Lowpath.exe ./cmd/accelerator
+          if ($LASTEXITCODE -ne 0) { throw 'Windows client build failed' }
+          Copy-Item LICENSE, THIRD_PARTY_NOTICES.md, internal/divert/bin/WinDivert-LICENSE.txt dist/windows-x64
+
+      - name: Start packaged client and check the login API
+        run: |
+          Remove-Item Env:LOWPATH_GATEWAY -ErrorAction SilentlyContinue
+          $info = [Diagnostics.ProcessStartInfo]::new((Resolve-Path dist/windows-x64/Lowpath.exe).Path)
+          $info.UseShellExecute = $false
+          $info.RedirectStandardOutput = $true
+          $info.ArgumentList.Add('-headless')
+          $info.ArgumentList.Add('-data')
+          $info.ArgumentList.Add((Join-Path $env:RUNNER_TEMP 'lowpath-smoke'))
+          $client = [Diagnostics.Process]::Start($info)
+          try {
+            $launch = $client.StandardOutput.ReadLineAsync()
+            if (!$launch.Wait(15000) -or !$launch.Result) {
+              throw 'Packaged client did not start with its default gateway'
+            }
+            $uri = [Uri]$launch.Result
+            if ($uri.Scheme -ne 'http' -or $uri.Host -ne '127.0.0.1') {
+              throw 'Unexpected local UI address'
+            }
+            $page = Invoke-WebRequest $uri -SessionVariable session -TimeoutSec 10
+            if ($page.Content -notmatch '/assets/.+\.js') {
+              throw 'Built React assets are missing from the EXE'
+            }
+            $origin = $uri.GetLeftPart([UriPartial]::Authority)
+            $account = Invoke-RestMethod "$origin/api/account" -WebSession $session -TimeoutSec 10
+            if ($account.signed_in -ne $false -or $account.can_remember -ne $false) {
+              throw 'Client must start with no saved login state'
+            }
+            $bootstrap = Invoke-RestMethod "$origin/api/bootstrap" -WebSession $session -TimeoutSec 10
+            if ($bootstrap.platform.os -ne 'windows' -or $bootstrap.platform.capture.backend -ne 'divert') {
+              throw 'Windows capture backend is missing'
+            }
+          } finally {
+            if (!$client.HasExited) { $client.Kill(); $client.WaitForExit() }
+            $client.Dispose()
+          }
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: Lowpath-Windows-x64
+          path: dist/windows-x64/
+          if-no-files-found: error
