@@ -107,7 +107,7 @@ func (s *Server) recoverLeftover() {
 	case m.Backend != s.plat.Capture.Name():
 		// A marker from another capture method (an older or newer build);
 		// this one can't undo it, so say so instead of claiming it's clean.
-		v.Detail = fmt.Sprintf("It used the %q capture method, which this version can't clean up.", m.Backend)
+		v.Detail = fmt.Sprintf("上次使用 %q 捕获方式。当前版本无法清理该方式的残留。", m.Backend)
 		s.log.Warn("session marker from another capture backend", "backend", m.Backend, "have", s.plat.Capture.Name())
 	default:
 		if err := s.plat.Capture.Recover(m); err != nil {
@@ -116,10 +116,10 @@ func (s *Server) recoverLeftover() {
 		}
 	}
 	if v.Detail == "" {
-		v.Message = fmt.Sprintf("Lowpath closed unexpectedly while boosting %s. Your game went back to your normal connection when it closed.", game)
+		v.Message = fmt.Sprintf("为 %s 加速时 Lowpath 意外退出，游戏已恢复直连。", game)
 	} else {
 		// Only a clean Recover says the connection is back to normal.
-		v.Message = fmt.Sprintf("Lowpath closed unexpectedly while boosting %s and could not finish cleaning up after it, so your connection may not be back to normal yet.", game)
+		v.Message = fmt.Sprintf("为 %s 加速时 Lowpath 意外退出，路由清理尚未完成。", game)
 	}
 	s.log.Warn("the last route-mode session ended without stopping", "game", m.Game, "pid", m.PID, "started", m.Started)
 	s.unmarkSession()
@@ -197,9 +197,9 @@ func failOpenMessage(err error, game string) string {
 	if errors.Is(err, capture.ErrRouteRemoved) {
 		// Not Lowpath's packet handling, and something the user can change:
 		// name the usual culprits.
-		return fmt.Sprintf("Boost stopped: another program (a network manager, VPN or firewall) removed the routing that sends %s through Lowpath, so the game went back to your normal connection.", game)
+		return fmt.Sprintf("其他网络程序移除了 %s 的加速路由。游戏已恢复直连。", game)
 	}
-	return fmt.Sprintf("Boost stopped: Lowpath's packet handling for %s stopped working, so the game went back to your normal connection.", game)
+	return fmt.Sprintf("%s 的游戏流量捕获停止，游戏已恢复直连。", game)
 }
 
 // stopEngine stops the engine (recording the game's server first in route

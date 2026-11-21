@@ -414,7 +414,7 @@ func TestVerdictWiFiSignalReading(t *testing.T) {
 	busy := WiFiSignal{RSSI: ptr(-58), Band: "5", BusyPct: ptr(72.0)}
 	d := diagnose(Evidence{Link: l, WiFi: &busy, Bloat: bloatOn(l, 5*time.Minute, "A", 50, 4, 6)})
 	wantVerdict(t, d, VerdictWiFi, ConfidenceHigh)
-	if f := strings.Join(d.Verdict.Facts, "\n"); !strings.Contains(f, "-58 dBm on 5 GHz, channel 72% busy (weak or crowded)") {
+	if f := strings.Join(d.Verdict.Facts, "\n"); !strings.Contains(f, "-58 dBm on 5 GHz, channel 72% busy (信号偏弱或信道拥挤)") {
 		t.Errorf("facts: %s", f)
 	}
 	quiet := WiFiSignal{RSSI: ptr(-58), Band: "5", BusyPct: ptr(20.0)}
@@ -424,7 +424,7 @@ func TestVerdictWiFiSignalReading(t *testing.T) {
 	// A clean router on Wi-Fi still shows the signal under the check.
 	d = diagnose(Evidence{Link: l, WiFi: &WiFiSignal{RSSI: ptr(-77), Band: "5"}, Bloat: bloatOn(l, 5*time.Minute, "A", 50, 0, 3)})
 	c := check(t, d, ruleHome)
-	if c.Status != CheckClear || !strings.Contains(strings.Join(c.Facts, "\n"), "-77 dBm on 5 GHz (weak or crowded)") {
+	if c.Status != CheckClear || !strings.Contains(strings.Join(c.Facts, "\n"), "-77 dBm on 5 GHz (信号偏弱或信道拥挤)") {
 		t.Errorf("clear check: %+v", c)
 	}
 	// Not on a cable.

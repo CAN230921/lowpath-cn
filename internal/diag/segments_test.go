@@ -37,7 +37,7 @@ func TestSegmentsNothingMeasured(t *testing.T) {
 			t.Errorf("%s: %+v", s.ID, s)
 		}
 	}
-	if h := segment(t, d, SegmentHome); !strings.Contains(h.Summary, "Diagnostics open") {
+	if h := segment(t, d, SegmentHome); !strings.Contains(h.Summary, "保持诊断页打开") {
 		t.Errorf("home says %q", h.Summary)
 	}
 }
@@ -64,22 +64,22 @@ func TestSegmentsCleanRouterWithSpikes(t *testing.T) {
 	if h.Status != SegmentWarn || h.Blamed || !strings.Contains(h.Summary, "3 replies took 100 ms") {
 		t.Fatalf("home %+v", h)
 	}
-	if c := check(t, d, ruleHome); c.Status != CheckClear || !strings.Contains(c.Facts[0], "3 replies of 100 ms or more") {
+	if c := check(t, d, ruleHome); c.Status != CheckClear || !strings.Contains(c.Facts[0], "3 次回包达到 100 ms") {
 		t.Errorf("home check %+v", c)
 	}
 }
 
-// Clean router pings over a weak or crowded Wi-Fi link: the check stays
+// Clean router pings over a 信号偏弱或信道拥挤 Wi-Fi link: the check stays
 // clear (the radio loses nothing now), but the bar says "Watch", not "OK".
 func TestSegmentsCleanRouterOnWeakWiFi(t *testing.T) {
 	weak, strong, busy := -78, -55, 85.0
 	d := diagnose(Evidence{Link: wifiLink(), Gateway: livePings(wifiLink(), 0, 4), WiFi: &WiFiSignal{RSSI: &weak, Band: "5"}})
-	if c := check(t, d, ruleHome); c.Status != CheckClear || !strings.Contains(strings.Join(c.Facts, " "), "weak or crowded") {
+	if c := check(t, d, ruleHome); c.Status != CheckClear || !strings.Contains(strings.Join(c.Facts, " "), "信号偏弱或信道拥挤") {
 		t.Fatalf("home check %+v", c)
 	}
 	h := segment(t, d, SegmentHome)
 	if h.Status != SegmentWarn || h.Blamed || *h.LossPct != 0 ||
-		!strings.Contains(h.Summary, "without loss") || !strings.Contains(h.Summary, "-78 dBm on 5 GHz (weak or crowded)") {
+		!strings.Contains(h.Summary, "未测到丢包") || !strings.Contains(h.Summary, "-78 dBm on 5 GHz (信号偏弱或信道拥挤)") {
 		t.Fatalf("home %+v", h)
 	}
 	// A busy channel on top of spikes: both said, once each.
@@ -111,7 +111,7 @@ func TestSegmentsRateLimitedRouterIsNotLoss(t *testing.T) {
 	g.Limited = true
 	d := diagnose(Evidence{Link: wifiLink(), Gateway: g})
 	c := check(t, d, ruleHome)
-	if c.Status != CheckClear || !strings.Contains(strings.Join(c.Facts, " "), "limits how many pings") {
+	if c.Status != CheckClear || !strings.Contains(strings.Join(c.Facts, " "), "限制探测回包") {
 		t.Fatalf("home check %+v", c)
 	}
 	if h := segment(t, d, SegmentHome); h.LossPct != nil || h.Status != SegmentGood {
@@ -140,7 +140,7 @@ func TestSegmentsLineBlamesHome(t *testing.T) {
 	d := diagnose(Evidence{Link: cableLink(), Gateway: livePings(cableLink(), 0, 3), Bloat: bloatOn(cableLink(), time.Minute, "D", 50, 0, 3)})
 	wantVerdict(t, d, VerdictLine, ConfidenceHigh)
 	h := segment(t, d, SegmentHome)
-	if h.Status != SegmentBad || !h.Blamed || !strings.Contains(h.Summary, "busy") {
+	if h.Status != SegmentBad || !h.Blamed || !strings.Contains(h.Summary, "高负载") {
 		t.Fatalf("home %+v", h)
 	}
 }
@@ -210,7 +210,7 @@ func TestSegmentsRouterStoppedAnswering(t *testing.T) {
 	if h.Status != SegmentBad || !h.Blamed || h.RTTMS != nil || h.LossPct == nil || *h.LossPct != 100 {
 		t.Fatalf("home %+v", h)
 	}
-	if !strings.Contains(strings.Join(d.Checks[0].Facts, " "), "stopped answering") {
+	if !strings.Contains(strings.Join(d.Checks[0].Facts, " "), "所有探测均超时") {
 		t.Errorf("facts %q", d.Checks[0].Facts)
 	}
 	// The same series from a router that never answered: not loss.
@@ -224,7 +224,7 @@ func TestSegmentsBoost(t *testing.T) {
 	p := boostPath(PathStats{RTTMS: 60, LossPct: 0.5, Samples: 60}, PathStats{RTTMS: 20, LossPct: 0, JitterMS: 1, Samples: 60}, ptr(35.0))
 	d := diagnose(Evidence{Link: cableLink(), Gateway: livePings(cableLink(), 0, 3), Boost: p})
 	l := segment(t, d, SegmentLowpath)
-	if l.Status != SegmentGood || *l.RTTMS != 20 || *l.LossPct != 0 || !strings.Contains(l.Source, "Example Game boost") {
+	if l.Status != SegmentGood || *l.RTTMS != 20 || *l.LossPct != 0 || !strings.Contains(l.Source, "Example Game 加速期间") {
 		t.Fatalf("lowpath %+v", l)
 	}
 	sv := segment(t, d, SegmentServer)

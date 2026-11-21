@@ -27,7 +27,7 @@ go build -o accelerator ./cmd/accelerator
 ./accelerator -gateway https://edge.example.org -test-target 203.0.113.12:42319
 ```
 
-代理模式下，将测试程序连接到界面显示的本地 UDP 地址。开发用 `-test-route` 需要管理员权限和与测试目标不同的 `-gateway-ip`，以临时 utun 主机路由接管专用测试服务器。该模式承载指定端口的 IPv4 UDP，停止或退出会关闭测试接口，进程最迟 90 秒退出。
+代理模式下，将测试程序连接到界面显示的本地 UDP 地址。该模式已在 Mac 上通过公网 MASQUE 和 AWS 验证。开发用 `-test-route` 需要管理员权限和与测试目标不同的 `-gateway-ip`，以临时 utun 主机路由接管专用测试服务器。系统路由模式仍在验收，设计范围为专用测试 IPv4 地址和指定的 UDP 端口。
 
 Windows 客户端计划复用同一套 React 界面和托管节点 API。参阅 [第三方许可](THIRD_PARTY_NOTICES.md) 获取可选的 Windows 流量捕获依赖。
 

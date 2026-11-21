@@ -85,7 +85,7 @@ func TestWiFiAPIReadingFeedsTheVerdict(t *testing.T) {
 	}
 	d := srv.diagnosis()
 	if d.Verdict.ID != diag.VerdictWiFi || d.Verdict.Confidence != diag.ConfidenceHigh ||
-		!strings.Contains(strings.Join(d.Verdict.Facts, "\n"), "-78 dBm on 5 GHz (weak or crowded)") {
+		!strings.Contains(strings.Join(d.Verdict.Facts, "\n"), "-78 dBm on 5 GHz (信号偏弱或信道拥挤)") {
 		t.Errorf("verdict: %+v", d.Verdict)
 	}
 	ev := srv.evidence(time.Now())
@@ -129,14 +129,14 @@ func TestWiFiAPIOnACable(t *testing.T) {
 	// A cable in use and no Wi-Fi: say why there is no reading.
 	fp := newFake(t)
 	srv, api := newWiFiServer(t, fp, cableLine{newFakeHomeLine()})
-	if v := getWiFi(t, api); v.State != wifiNone || v.Route != diag.LinkEthernet || !strings.Contains(v.Message, "over a cable") {
+	if v := getWiFi(t, api); v.State != wifiNone || v.Route != diag.LinkEthernet || !strings.Contains(v.Message, "有线网络") {
 		t.Errorf("cable only: %+v", v)
 	}
 	// A cable and a connected Wi-Fi: shown, but not in use and not evidence.
 	fp.WiFi.SetLink(exampleLink(-80), nil)
 	time.Sleep(wifiCacheFor + 50*time.Millisecond)
 	v := getWiFi(t, api)
-	if v.State != wifiOK || v.InUse || !strings.Contains(v.Message, "isn't carrying your internet traffic") {
+	if v.State != wifiOK || v.InUse || !strings.Contains(v.Message, "由 有线网络 承载") {
 		t.Errorf("cable and Wi-Fi: %+v", v)
 	}
 	if idx := fp.WiFi.Indexes(); idx[len(idx)-1] != 0 {
@@ -155,7 +155,7 @@ func TestWiFiAPIHungService(t *testing.T) {
 	srv, api := newWiFiServer(t, fp, nil)
 	start := time.Now()
 	v := getWiFi(t, api)
-	if v.State != wifiError || v.Link != nil || !strings.Contains(v.Message, "isn't answering") {
+	if v.State != wifiError || v.Link != nil || !strings.Contains(v.Message, "未响应") {
 		t.Errorf("hung: %+v", v)
 	}
 	if d := srv.diagnosis(); d.Verdict.ID == "" {

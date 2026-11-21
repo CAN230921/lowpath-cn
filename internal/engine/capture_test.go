@@ -490,7 +490,7 @@ func TestEgressGroupsRestrictDuplicationAndFailOver(t *testing.T) {
 	}
 	var failover bool
 	for _, ev := range e.Snapshot().Events {
-		failover = failover || ev.Kind == "switch" && strings.Contains(ev.Msg, "new IP")
+		failover = failover || ev.Kind == "switch" && strings.Contains(ev.Msg, "出口 IP 已变化")
 	}
 	if !failover {
 		t.Errorf("no failover event mentioning the new IP: %+v", e.Snapshot().Events)

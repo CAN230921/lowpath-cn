@@ -579,15 +579,15 @@ func (e *Engine) choose(now time.Time, seed map[string]Stats) {
 		if !cur.fallback {
 			e.routing.Store(&routing{fallback: true})
 			if e.cfg.KillSwitch {
-				e.event("fallback", "All routes are down - kill switch is blocking game traffic")
+				e.event("fallback", "所有线路均已中断，游戏流量已暂停。")
 			} else {
-				e.event("fallback", "All routes are down - sending game traffic directly")
+				e.event("fallback", "所有线路均已中断，游戏已恢复直连。")
 			}
 		}
 		return
 	}
 	if cur.fallback {
-		e.event("recovered", "Routes recovered - optimizing again")
+		e.event("recovered", "线路已恢复，继续加速。")
 	}
 
 	up, failover := e.pickGroup(up)
@@ -641,17 +641,17 @@ func (e *Engine) choose(now time.Time, seed map[string]Stats) {
 
 	switch added, removed := diff(active, next); {
 	case failover:
-		e.event("switch", "Every route to the current egress relay is down - failed over to "+labels(next)+
-			". The game server will see a new IP address, so the game may reconnect")
+		e.event("switch", "当前出口的线路均已中断，已切换到 "+labels(next)+
+			"。出口 IP 已变化，游戏可能会重新连接。")
 	case active == nil:
-		e.event("applied", "Routing via "+labels(next))
+		e.event("applied", "当前线路："+labels(next))
 	case len(added)+len(removed) > 0:
-		msg := "Switched routes"
+		msg := "已切换线路"
 		if len(removed) > 0 {
-			msg += ": dropped " + labels(removed)
+			msg += "，停用 " + labels(removed)
 		}
 		if len(added) > 0 {
-			msg += ", added " + labels(added)
+			msg += "，启用 " + labels(added)
 		}
 		e.event("switch", msg)
 	}

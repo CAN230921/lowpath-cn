@@ -71,7 +71,7 @@ func TestGatewayAPIFeedsTheVerdict(t *testing.T) {
 		t.Fatalf("segments %+v", d.Segments)
 	}
 	_, report := get("/api/diag/verdict/report")
-	if !strings.Contains(report, "ROUTE, PART BY PART") || !strings.Contains(report, "Router pings (live router pings") {
+	if !strings.Contains(report, "分段线路") || !strings.Contains(report, "路由器探测（live router pings") {
 		t.Errorf("report:\n%s", report)
 	}
 	_, export := get("/api/diagnostics")

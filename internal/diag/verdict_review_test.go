@@ -82,23 +82,23 @@ func TestVerdictISPAdviceDuringBoost(t *testing.T) {
 	p := boostPath(PathStats{RTTMS: 40, LossPct: 6, JitterMS: 4, Samples: 50}, PathStats{RTTMS: 12, JitterMS: 1, Samples: 50}, ptr(25.0))
 	d := diagnose(Evidence{Link: cableLink(), Boost: p})
 	wantVerdict(t, d, VerdictISP, ConfidenceMedium)
-	if !strings.Contains(d.Verdict.Advice, "Keep the boost on") {
+	if !strings.Contains(d.Verdict.Advice, "继续使用加速") {
 		t.Errorf("advice during a boost: %q", d.Verdict.Advice)
 	}
 	for _, n := range d.Next {
-		if strings.Contains(n.Text, "Boost the game") {
+		if strings.Contains(n.Text, "对比加速") {
 			t.Errorf("next step during a boost: %q", n.Text)
 		}
 	}
 	// A trace's ISP verdict while boosting: the same.
 	d = diagnose(Evidence{Link: cableLink(), Trace: traceWith(8, 4, 5), Boost: boostPath(PathStats{Samples: 5}, PathStats{Samples: 5}, nil)})
 	wantVerdict(t, d, VerdictISP, ConfidenceHigh)
-	if !strings.Contains(d.Verdict.Advice, "Keep the boost on") {
+	if !strings.Contains(d.Verdict.Advice, "继续使用加速") {
 		t.Errorf("trace advice during a boost: %q", d.Verdict.Advice)
 	}
 	// Without a boost: start one.
 	d = diagnose(Evidence{Link: cableLink(), Trace: traceWith(8, 4, 5)})
-	if !strings.Contains(d.Verdict.Advice, "Boost the game") {
+	if !strings.Contains(d.Verdict.Advice, "对比加速") {
 		t.Errorf("advice without a boost: %q", d.Verdict.Advice)
 	}
 }
@@ -127,7 +127,7 @@ func TestVerdictServerHintWording(t *testing.T) {
 			t.Errorf("hint claims %q: %s", bad, all)
 		}
 	}
-	if !strings.Contains(all, "reports no time") || !strings.Contains(d.Verdict.Title, "may be") {
+	if !strings.Contains(all, "未报告到服务器的延迟") || !strings.Contains(d.Verdict.Title, "可能") {
 		t.Errorf("hint wording: %s", all)
 	}
 }

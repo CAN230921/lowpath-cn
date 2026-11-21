@@ -425,7 +425,7 @@ func (c *currentServers) view(g Game, snap *engine.Snapshot) currentView {
 		v.Server = &serverView{Addr: saved[0]}
 	} else {
 		v.State, v.Source = currentNone, ""
-		v.Message = "Start " + g.Name + " and join a match: Lowpath learns its server from the game's own traffic."
+		v.Message = "启动 " + g.Name + " 并加入对局，Lowpath 将根据游戏流量识别服务器。"
 		return v
 	}
 	v.You = c.fillServer(v.Server)
@@ -439,13 +439,13 @@ func (c *currentServers) watchView() watchView {
 	case c.watch != nil:
 		return watchView{State: "on"}
 	case c.watchErr == nil:
-		return watchView{State: "idle", Message: "Starts watching when a game runs."}
+		return watchView{State: "idle", Message: "游戏运行后开始检测。"}
 	case errors.Is(c.watchErr, detect.ErrNeedAdmin):
-		return watchView{State: "needs_admin", Message: "Without a boost, Lowpath sees which server a game uses only when it runs as administrator. Boost the game, or restart Lowpath as administrator."}
+		return watchView{State: "needs_admin", Message: "识别直连服务器需要管理员权限。可启动加速，或以管理员身份重启 Lowpath。"}
 	case errors.Is(c.watchErr, errors.ErrUnsupported):
-		return watchView{State: "unsupported", Message: "This system can't report a game's server without a boost yet: boost the game to see it."}
+		return watchView{State: "unsupported", Message: "当前系统可在加速期间识别游戏服务器。"}
 	default:
-		return watchView{State: "error", Message: "Can't watch game traffic: " + c.watchErr.Error()}
+		return watchView{State: "error", Message: "无法检测游戏流量：" + c.watchErr.Error()}
 	}
 }
 

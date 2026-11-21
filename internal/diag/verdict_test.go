@@ -103,7 +103,7 @@ func TestVerdictWiFiFromRouterLoss(t *testing.T) {
 		t.Errorf("segment %q helps %v", d.Verdict.Segment, d.Verdict.LowpathHelps)
 	}
 	facts := strings.Join(d.Verdict.Facts, "\n")
-	for _, want := range []string{"4 of 50 pings lost (8.0%)", "couldn't read the Wi-Fi signal"} {
+	for _, want := range []string{"4/50 次超时（8.0%）", "无法读取 Wi-Fi 信号强度"} {
 		if !strings.Contains(facts, want) {
 			t.Errorf("facts lack %q:\n%s", want, facts)
 		}
@@ -128,7 +128,7 @@ func TestVerdictHomeOnCable(t *testing.T) {
 	l := cableLink()
 	d := diagnose(Evidence{Link: l, Bloat: bloatOn(l, 5*time.Minute, "A+", 50, 3, 4)})
 	wantVerdict(t, d, VerdictHome, ConfidenceHigh)
-	if !strings.Contains(d.Verdict.Detail, "cable") {
+	if !strings.Contains(d.Verdict.Detail, "有线") {
 		t.Errorf("detail %q", d.Verdict.Detail)
 	}
 }
@@ -142,7 +142,7 @@ func TestVerdictRouterNoise(t *testing.T) {
 	}
 	// A router that ignores ping isn't losing anything.
 	d = diagnose(Evidence{Link: l, Bloat: bloatOn(l, 5*time.Minute, "A", 50, 50, 4)})
-	if c := check(t, d, ruleHome); c.Status != CheckUnknown || !strings.Contains(strings.Join(c.Facts, " "), "ignore ping") {
+	if c := check(t, d, ruleHome); c.Status != CheckUnknown || !strings.Contains(strings.Join(c.Facts, " "), "路由器会忽略探测") {
 		t.Fatalf("home = %s %q %v", c.Status, c.Summary, c.Facts)
 	}
 	// Slow replies alone are less certain: routers answer ping at low priority.
@@ -156,7 +156,7 @@ func TestVerdictGatewayPingerWins(t *testing.T) {
 	// The bufferbloat test's router pings are clean, the dedicated ones not.
 	d := diagnose(Evidence{Link: l, Gateway: g, Bloat: bloatOn(l, 5*time.Minute, "A", 50, 0, 4)})
 	wantVerdict(t, d, VerdictWiFi, ConfidenceMedium)
-	if !strings.Contains(strings.Join(d.Verdict.Facts, " "), "8 of 400") {
+	if !strings.Contains(strings.Join(d.Verdict.Facts, " "), "8/400") {
 		t.Errorf("facts %v", d.Verdict.Facts)
 	}
 }
@@ -191,7 +191,7 @@ func TestVerdictOverloadedLine(t *testing.T) {
 	l := cableLink()
 	d := diagnose(Evidence{Link: l, Bloat: bloatOn(l, 5*time.Minute, "C", 50, 0, 4)})
 	wantVerdict(t, d, VerdictLine, ConfidenceHigh)
-	if !strings.Contains(d.Verdict.Detail, "grade C") || !strings.Contains(strings.Join(d.Verdict.Facts, " "), "+40 ms downloading") {
+	if !strings.Contains(d.Verdict.Detail, "评级 C") || !strings.Contains(strings.Join(d.Verdict.Facts, " "), "下载增加 +40 ms") {
 		t.Errorf("verdict %q %v", d.Verdict.Detail, d.Verdict.Facts)
 	}
 	for _, g := range []string{"A+", "A", "B"} {
@@ -205,13 +205,13 @@ func TestVerdictOverloadedLine(t *testing.T) {
 		OtherDownMbps: ptr(88.0), LineDownMbps: ptr(100.0)}
 	d = diagnose(Evidence{Link: l, Passive: p})
 	wantVerdict(t, d, VerdictLine, ConfidenceHigh)
-	if f := strings.Join(d.Verdict.Facts, " "); !strings.Contains(f, "88 of 100 Mbit/s downloading") || !strings.Contains(f, "from 22 to 61 ms") || strings.Contains(f, "this PC") {
+	if f := strings.Join(d.Verdict.Facts, " "); !strings.Contains(f, "88 of 100 Mbit/s downloading") || !strings.Contains(f, "从 22 ms 升至 61 ms") || strings.Contains(f, "本机的") {
 		t.Errorf("facts %q", f)
 	}
 	// With per-connection counters it names the program.
 	p.Top = &TopTalker{Name: "steam", DownMbps: 80.4, UpMbps: 0.6}
 	d = diagnose(Evidence{Link: l, Passive: p})
-	if f := strings.Join(d.Verdict.Facts, " "); !strings.Contains(f, "most of it is steam on this PC (80 Mbit/s down, 1 up)") {
+	if f := strings.Join(d.Verdict.Facts, " "); !strings.Contains(f, "主要流量来自本机的 steam（下行 80 Mbit/s，上行 1 Mbit/s）") {
 		t.Errorf("facts with the top program %q", f)
 	}
 	p.Top = nil
@@ -248,7 +248,7 @@ func TestVerdictISPRoute(t *testing.T) {
 	if !d.Verdict.LowpathHelps || d.Verdict.Segment != SegmentISP {
 		t.Errorf("helps %v segment %q", d.Verdict.LowpathHelps, d.Verdict.Segment)
 	}
-	if f := d.Verdict.Facts[0]; !strings.Contains(f, "hop 5 (core1.example.net)") || !strings.Contains(f, "3.5%") {
+	if f := d.Verdict.Facts[0]; !strings.Contains(f, "第 5 跳 (core1.example.net)") || !strings.Contains(f, "3.5%") {
 		t.Errorf("fact %q", f)
 	}
 	found := false
@@ -298,7 +298,7 @@ func TestVerdictISPFromBoost(t *testing.T) {
 	p := boostPath(PathStats{RTTMS: 40, LossPct: 6, JitterMS: 4, Samples: 50}, PathStats{RTTMS: 12, LossPct: 0, JitterMS: 1, Samples: 50}, ptr(25.0))
 	d := diagnose(Evidence{Link: cableLink(), Boost: p})
 	wantVerdict(t, d, VerdictISP, ConfidenceMedium)
-	if f := strings.Join(d.Verdict.Facts, " "); !strings.Contains(f, "During the Example Game boost") || !strings.Contains(f, "ICMP") {
+	if f := strings.Join(d.Verdict.Facts, " "); !strings.Contains(f, "Example Game 加速期间") || !strings.Contains(f, "ICMP") {
 		t.Errorf("facts %q", f)
 	}
 	// From an analysis instead of a live boost: less sure.
@@ -340,7 +340,7 @@ func TestVerdictGameServer(t *testing.T) {
 	tr := traceWith(9, 9, 6)
 	d = diagnose(Evidence{Link: cableLink(), Trace: tr, TraceKind: TraceKindServer})
 	c := check(t, d, ruleServer)
-	if c.Status != CheckUnknown || !strings.Contains(strings.Join(c.Facts, " "), "limit ping") {
+	if c.Status != CheckUnknown || !strings.Contains(strings.Join(c.Facts, " "), "限制应答") {
 		t.Errorf("server = %s %v", c.Status, c.Facts)
 	}
 }
@@ -352,7 +352,7 @@ func TestVerdictAlreadyOptimal(t *testing.T) {
 	p := boostPath(PathStats{RTTMS: 21, LossPct: 0, JitterMS: 1, Samples: 60}, PathStats{RTTMS: 15, LossPct: 0, JitterMS: 1, Samples: 60}, ptr(5.0))
 	d := diagnose(Evidence{Link: l, Bloat: clean, Trace: traceWith(8, 0, 0), Boost: p})
 	wantVerdict(t, d, VerdictOptimal, ConfidenceMedium)
-	if !strings.Contains(strings.Join(d.Verdict.Facts, " "), "direct 21 ms with 0.0% loss, the relay route 20 ms") {
+	if !strings.Contains(strings.Join(d.Verdict.Facts, " "), "直连 21 ms、丢包 0.0%，中继线路 20 ms") {
 		t.Errorf("facts %v", d.Verdict.Facts)
 	}
 	p.SameMethod = true

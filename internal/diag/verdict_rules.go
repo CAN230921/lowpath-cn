@@ -32,7 +32,7 @@ func (homeRule) check(v *view) (Check, *Verdict) {
 	var facts []string
 	if g != nil && g.Lost == g.Sent && !g.Stopped {
 		// Many routers don't answer ping at all; that is no loss.
-		facts = append(facts, "Your router didn't answer any ping ("+g.Source+"): many routers ignore ping, so this says nothing about loss.")
+		facts = append(facts, "路由器未回复探测（"+g.Source+"）。部分路由器会忽略探测，无法据此判断丢包。")
 		g = nil
 	}
 	hop := v.homeLossHop()
@@ -40,9 +40,9 @@ func (homeRule) check(v *view) (Check, *Verdict) {
 	traced := v.trace != nil && v.trace.Reached
 	if g == nil && !traced {
 		c.Status, c.Facts = CheckUnknown, facts
-		c.Summary = "Keep Diagnostics open for a minute while Lowpath pings your router, or run the bufferbloat test on this connection."
+		c.Summary = "保持诊断页打开一分钟以测量路由器，也可在当前连接运行缓冲膨胀测试。"
 		if v.ev.Bloat != nil && v.bloat == nil {
-			c.Summary = v.bloatWhy + " Keep Diagnostics open for a minute while Lowpath pings your router, or run the test again on this connection."
+			c.Summary = v.bloatWhy + " 保持诊断页打开一分钟以测量路由器，或在当前连接重试测试。"
 		}
 		return c, nil
 	}
@@ -54,15 +54,15 @@ func (homeRule) check(v *view) (Check, *Verdict) {
 		lossBad = !g.Limited && g.lossPct() > gatewayLossPct && g.Lost >= 2
 		tailBad = g.TailMS != nil && *g.TailMS > gatewayTailMS
 		if g.Limited {
-			facts = append(facts, "Your router limits how many pings it answers, so its lost pings aren't counted as loss.")
+			facts = append(facts, "路由器限制探测回包，测量排除这些超时。")
 		}
 		if g.Stopped {
-			facts = append(facts, "Your router answered at first and then stopped answering: every ping since was lost.")
+			facts = append(facts, "路由器最初有应答，随后所有探测均超时。")
 		}
 		conf = v.gatewayConf
 	}
 	if hop != nil {
-		facts = append(facts, fmt.Sprintf("The route trace (%s ago) finds loss starting at hop %d, inside your home network, that persists to the destination: %.1f%% of probes lost.",
+		facts = append(facts, fmt.Sprintf("路由追踪（%s前）显示，家庭网络内第 %d 跳开始丢包并持续到终点，丢包率 %.1f%%。",
 			ago(v.ev.At.Sub(v.trace.FinishedAt)), hop.TTL, *v.trace.DestLossPct))
 		if !lossBad && !tailBad {
 			conf = v.traceConf
@@ -77,12 +77,12 @@ func (homeRule) check(v *view) (Check, *Verdict) {
 		c.Status, c.Facts = CheckClear, facts
 		switch {
 		case g != nil:
-			c.Summary = "Your router answers pings quickly and without loss."
+			c.Summary = "路由器应答快，未测到丢包。"
 		default:
-			c.Summary = "The route trace finds no loss starting inside your home network."
+			c.Summary = "路由追踪未在家庭网络中发现丢包。"
 		}
 		if g != nil && g.TailPct < 99 && g.TailMS != nil {
-			c.Summary += fmt.Sprintf(" (Measured to the %dth percentile; the rarest spikes need a longer gateway test.)", g.TailPct)
+			c.Summary += fmt.Sprintf("（统计到 P%d。罕见的尖峰需要更长的测试。）", g.TailPct)
 		}
 		return c, nil
 	}
@@ -90,7 +90,7 @@ func (homeRule) check(v *view) (Check, *Verdict) {
 		// Routers answer pings to themselves at low priority, so slow
 		// replies alone can come from the router's CPU, not the link.
 		conf = conf.lower()
-		facts = append(facts, "Only the router's replies are slow, with no loss; routers answer ping at low priority, so this is less certain.")
+		facts = append(facts, "仅路由器自身应答偏慢。路由器应答探测优先级较低，结论暂不确定。")
 	}
 
 	kind := v.linkKind()
@@ -101,35 +101,35 @@ func (homeRule) check(v *view) (Check, *Verdict) {
 		facts = append(facts, fact)
 		if known && !weak {
 			vd.ID = VerdictHome
-			vd.Title = "Your home network is the problem"
-			vd.Detail = "The link to your router loses pings or stalls, though the Wi-Fi signal is strong: the router, interference, or another busy device on the network is the likely cause."
-			vd.Advice = "Restart the router, and try a cable to see whether the problem follows the Wi-Fi."
+			vd.Title = "家庭网络存在异常"
+			vd.Detail = "Wi-Fi 信号较强，但路由器探测存在丢包或高延迟。原因可能在路由器、无线干扰或其他设备占用带宽。"
+			vd.Advice = "可重启路由器，再用网线对比是否仍有问题。"
 			vd.Confidence = minConf(conf, ConfidenceMedium)
 		} else {
 			vd.ID = VerdictWiFi
 			vd.Title = "Wi-Fi 连接异常"
-			vd.Detail = "The Wi-Fi link to your router loses pings or stalls, so every game lags before its traffic even leaves your home."
-			vd.Advice = "Use a cable if you can. Otherwise move closer to the router, switch to its 5 GHz network, and keep microwaves and other 2.4 GHz devices away. Run the diagnostics again on a cable to compare."
+			vd.Detail = "本机到路由器的 Wi-Fi 链路出现丢包或高延迟，会影响各游戏。"
+			vd.Advice = "可改用网线或靠近路由器，切到 5 GHz，避开微波炉等使用 2.4 GHz 的设备。重新测量后对比两种接入。"
 			if !known {
 				vd.Confidence = minConf(conf, ConfidenceMedium)
 			}
 		}
 	case LinkEthernet:
 		vd.ID = VerdictHome
-		vd.Title = "Your home network is the problem"
-		vd.Detail = "Even on a cable, the link to your router loses pings or stalls: the router, the cable or its port is the likely cause."
-		vd.Advice = "Restart the router, and try another cable and another port on it."
-		facts = append(facts, "This PC is on Ethernet.")
+		vd.Title = "家庭网络存在异常"
+		vd.Detail = "有线连接下，路由器探测也有丢包或延迟尖峰。可能与路由器、网线或端口有关。"
+		vd.Advice = "可重启路由器，并更换网线或端口进行对比。"
+		facts = append(facts, "当前使用有线网络。")
 	default:
 		vd.ID = VerdictHome
-		vd.Title = "Your home network is the problem"
-		vd.Detail = "The link to your router loses pings or stalls, so games lag before their traffic leaves your home."
-		vd.Advice = "Restart the router, and if you are on Wi-Fi, try a cable to compare."
+		vd.Title = "家庭网络存在异常"
+		vd.Detail = "本机到路由器出现丢包或延迟尖峰，游戏流量在家庭网络内就会受影响。"
+		vd.Advice = "可重启路由器。若当前使用 Wi-Fi，可改用网线对比。"
 		if kind == LinkOther {
-			facts = append(facts, "The connection in use is a VPN or another kind of link, so the \"router\" may be the VPN's server, not your own.")
+			facts = append(facts, "当前使用 VPN 或其他连接，探测目标可能是 VPN 的网关。")
 			vd.Confidence = ConfidenceLow
 		} else {
-			facts = append(facts, "Lowpath couldn't tell whether this PC uses Wi-Fi or a cable.")
+			facts = append(facts, "无法识别本机的接入类型。")
 			vd.Confidence = minConf(conf, ConfidenceMedium)
 		}
 	}
@@ -159,7 +159,7 @@ func (v *view) linkKind() string {
 // more than 60% of the time. known is false when the system gave none.
 func wifiSignal(w *WiFiSignal) (weak, known bool, fact string) {
 	if w == nil || (w.RSSI == nil && w.Band == "" && w.BusyPct == nil) {
-		return false, false, "Lowpath couldn't read the Wi-Fi signal strength, so it can't confirm the radio link is the cause."
+		return false, false, "无法读取 Wi-Fi 信号强度，暂时无法确认无线链路是否存在异常。"
 	}
 	var parts []string
 	if w.RSSI != nil {
@@ -178,20 +178,20 @@ func wifiSignal(w *WiFiSignal) (weak, known bool, fact string) {
 		s += fmt.Sprintf("channel %.0f%% busy", *w.BusyPct)
 		weak = weak || *w.BusyPct > busyChannelPct
 	}
-	word := "strong enough"
+	word := "信号良好"
 	if weak {
-		word = "weak or crowded"
+		word = "信号偏弱或信道拥挤"
 	}
 	return weak, true, fmt.Sprintf("Wi-Fi signal: %s (%s).", s, word)
 }
 
 func gatewayFact(g GatewaySample, v *view) string {
-	s := fmt.Sprintf("Router: %d of %d pings lost (%.1f%%), median %s ms", g.Lost, g.Sent, g.lossPct(), msText(g.P50MS))
+	s := fmt.Sprintf("路由器：%d/%d 次超时（%.1f%%），中位数 %s ms", g.Lost, g.Sent, g.lossPct(), msText(g.P50MS))
 	if g.TailPct > 0 {
 		s += fmt.Sprintf(", %d%% within %s ms", g.TailPct, msText(g.TailMS))
 	}
 	if g.Spikes > 0 {
-		s += fmt.Sprintf(", %d %s of %d ms or more", g.Spikes, plural(g.Spikes, "reply", "replies"), spikeMS)
+		s += fmt.Sprintf("，%d 次回包达到 %d ms", g.Spikes, spikeMS)
 	}
 	return s + fmt.Sprintf(" (%s, %s ago).", g.Source, ago(v.ev.At.Sub(g.At)))
 }
@@ -204,11 +204,11 @@ func (lineRule) check(v *view) (Check, *Verdict) {
 	c := Check{Rule: ruleLine, Name: "线路负载"}
 	var facts []string
 	vd := &Verdict{ID: VerdictLine, Segment: SegmentHome,
-		Advice: "Pause downloads, game updates, cloud backups and streams, on this PC and others, while you play. A router with Smart Queue / SQM (fq_codel or CAKE) keeps a full line from adding lag."}
+		Advice: "对局中可暂停同一网络的下载、更新、云备份和串流。路由器启用 SQM（fq_codel 或 CAKE）有助于控制带宽占满时的延迟。"}
 	if p := v.ev.Passive; p != nil && p.Active {
 		facts = append(facts, passiveFact(p))
-		vd.Title = "Something is filling your connection"
-		vd.Detail = "Other traffic on your network is using most of the line right now, and the game's ping rose with it."
+		vd.Title = "其他流量正在占满带宽"
+		vd.Detail = "同一网络的其他流量占用了大部分带宽，游戏延迟随之升高。"
 		vd.Confidence = ConfidenceHigh
 	}
 	b := v.bloat
@@ -217,8 +217,8 @@ func (lineRule) check(v *view) (Check, *Verdict) {
 		facts = append(facts, bloatFact(b, v))
 		bad = b.Grade == "C" || b.Grade == "D" || b.Grade == "F"
 		if bad && vd.Title == "" {
-			vd.Title = "Your connection lags when it's busy"
-			vd.Detail = fmt.Sprintf("Your line has bufferbloat (grade %s): when a download or upload fills it, the ping rises a lot, so games lag whenever something else uses the connection.", b.Grade)
+			vd.Title = "高负载时连接延迟明显增加"
+			vd.Detail = fmt.Sprintf("缓冲膨胀评级 %s。上传或下载占满带宽后延迟明显增加。", b.Grade)
 			vd.Confidence = v.bloatConf
 		}
 	}
@@ -229,35 +229,35 @@ func (lineRule) check(v *view) (Check, *Verdict) {
 	}
 	watching := v.ev.Passive != nil && v.ev.Passive.Watching
 	if watching {
-		facts = append(facts, "During this boost, nothing else is filling the connection.")
+		facts = append(facts, "本次加速期间未发现其他流量占满带宽。")
 	}
 	c.Facts = facts
 	switch {
 	case b != nil && b.Grade != "":
 		c.Status = CheckClear
-		c.Summary = fmt.Sprintf("Bufferbloat grade %s: the ping stays steady when the line is full.", b.Grade)
+		c.Summary = fmt.Sprintf("缓冲膨胀评级 %s。带宽占满时延迟仍然稳定。", b.Grade)
 		if b.Grade == "B" {
-			c.Summary = "Bufferbloat grade B: the ping rises a little when the line is full, not enough to blame it."
+			c.Summary = "缓冲膨胀评级 B。带宽占满时延迟仅小幅升高。"
 		}
 	case watching:
 		c.Status = CheckClear
-		c.Summary = "Nothing else is filling the connection during this boost."
+		c.Summary = "本次加速期间未发现其他流量占满带宽。"
 	default:
 		c.Status = CheckUnknown
 		switch {
 		case b != nil && b.Note != "":
-			c.Summary = "The last bufferbloat test has no grade: " + b.Note
+			c.Summary = "上次缓冲膨胀测试未获得评级：" + b.Note
 		case v.bloatWhy != "":
-			c.Summary = v.bloatWhy + " Run the bufferbloat test on this connection."
+			c.Summary = v.bloatWhy + " 请在当前连接上运行缓冲膨胀测试。"
 		default:
-			c.Summary = "Run the bufferbloat test on this connection."
+			c.Summary = "请在当前连接上运行缓冲膨胀测试。"
 		}
 	}
 	return c, nil
 }
 
 func bloatFact(b *BloatResult, v *view) string {
-	return fmt.Sprintf("Bufferbloat grade %s (%s ago): ping %s ms downloading and %s ms uploading, from %s ms idle.",
+	return fmt.Sprintf("缓冲膨胀评级 %s（%s前）。下载增加 %s ms，上传增加 %s ms，空载 %s ms。",
 		b.Grade, ago(v.ev.At.Sub(b.FinishedAt)), plusText(b.DownIncreaseMS), plusText(b.UpIncreaseMS), msText(b.IdleMS))
 }
 
@@ -269,15 +269,15 @@ func passiveFact(p *PassiveState) string {
 	if p.OtherUpMbps != nil {
 		use = append(use, fmt.Sprintf("%.0f of %s Mbit/s uploading", *p.OtherUpMbps, optMbps(p.LineUpMbps)))
 	}
-	s := "During the boost, other traffic is filling the connection"
+	s := "加速期间，其他流量正在占满带宽"
 	if len(use) > 0 {
 		s += " (" + strings.Join(use, ", ") + ")"
 	}
 	if p.RTTMS != nil && p.BaselineMS != nil {
-		s += fmt.Sprintf(" and the game's ping rose from %.0f to %.0f ms", *p.BaselineMS, *p.RTTMS)
+		s += fmt.Sprintf("，游戏延迟从 %.0f ms 升至 %.0f ms", *p.BaselineMS, *p.RTTMS)
 	}
 	if t := p.Top; t != nil {
-		s += fmt.Sprintf("; most of it is %s on this PC (%.0f Mbit/s down, %.0f up)", t.Name, t.DownMbps, t.UpMbps)
+		s += fmt.Sprintf("，主要流量来自本机的 %s（下行 %.0f Mbit/s，上行 %.0f Mbit/s）", t.Name, t.DownMbps, t.UpMbps)
 	}
 	return s + "."
 }
@@ -304,13 +304,13 @@ func (ispRule) check(v *view) (Check, *Verdict) {
 		switch from := t.LossFrom; {
 		case from == nil:
 			traceClean = true
-			facts = append(facts, fmt.Sprintf("The route trace to %s (%s ago) finds no loss persisting to the destination.", traceHost(t), age))
+			facts = append(facts, fmt.Sprintf("追踪至 %s（%s前）未发现持续至终点的丢包。", traceHost(t), age))
 		case *from == 0:
-			fact := fmt.Sprintf("The UDP route trace to %s (%s ago) loses %.1f%% of probes at the relay's port, but no router before it loses traffic.", traceHost(t), age, *t.DestLossPct)
+			fact := fmt.Sprintf("UDP 追踪至 %s（%s前），中继端口的探测丢包率为 %.1f%%，前序路由器未发现丢包。", traceHost(t), age, *t.DestLossPct)
 			vd := &Verdict{ID: VerdictRelay, Segment: SegmentLowpath, Confidence: v.traceConf, LowpathHelps: true,
 				Title:  "到中继的链路存在丢包",
-				Detail: "Probes to the relay's own port are lost on its last link or at the relay itself, while the routers on the way are clean.",
-				Advice: "Pick another relay, or check the relay's server: its provider's network or the server may be overloaded.",
+				Detail: "丢包出现在中继前的最后一段链路或中继本身。",
+				Advice: "可尝试切换节点，或检查当前中继的负载和网络。",
 				Facts:  []string{fact}}
 			c.Status, c.Facts, c.Summary = CheckFound, vd.Facts, vd.Title+"."
 			return c, vd
@@ -318,14 +318,14 @@ func (ispRule) check(v *view) (Check, *Verdict) {
 			// Only the destination loses replies: the route up to it is
 			// clean (the server rule looks at the destination).
 			traceClean = true
-			facts = append(facts, fmt.Sprintf("The route trace to %s (%s ago) finds no router on the way losing traffic; only the destination loses %.1f%% of its replies.", traceHost(t), age, *t.DestLossPct))
+			facts = append(facts, fmt.Sprintf("追踪至 %s（%s前），仅目标的探测回包超时，比例 %.1f%%。", traceHost(t), age, *t.DestLossPct))
 		case *from >= 1 && *from <= len(t.Hops):
 			h := t.Hops[*from-1]
 			where := ""
 			if h.Name != "" {
 				where = " (" + h.Name + ")"
 			}
-			fact := fmt.Sprintf("The route trace to %s (%s ago) finds loss starting at hop %d%s, past your home network, that persists to the destination: %.1f%% of probes lost.",
+			fact := fmt.Sprintf("追踪至 %s（%s前），家庭网络外第 %d 跳%s开始丢包并持续至终点，丢包率 %.1f%%。",
 				traceHost(t), age, h.TTL, where, *t.DestLossPct)
 			vd := ispVerdict(v.traceConf, fact, v.ev.Boost != nil)
 			c.Status, c.Facts, c.Summary = CheckFound, vd.Facts, vd.Title+"."
@@ -337,7 +337,7 @@ func (ispRule) check(v *view) (Check, *Verdict) {
 		// which both routes share: the server rule's case, not the ISP's.
 		legClean := p.ServerLossPct == nil || *p.ServerLossPct < routeLossPct
 		if p.Direct.LossPct >= routeLossPct && p.Relay.LossPct < cleanLossPct && legClean {
-			fact := fmt.Sprintf("%s: the direct route to the game server loses %.1f%% of pings, while the relay route loses %.1f%% and the relay reaches the server in %.0f ms.",
+			fact := fmt.Sprintf("%s：游戏直连探测丢包 %.1f%%，中继线路丢包 %.1f%%，中继至服务器延迟 %.0f ms。",
 				pathWords(p, v), p.Direct.LossPct, p.Relay.LossPct, *p.ServerMS)
 			conf := ConfidenceMedium
 			if p.Source == PathAnalysis {
@@ -349,7 +349,7 @@ func (ispRule) check(v *view) (Check, *Verdict) {
 			return c, vd
 		}
 		if p.Direct.LossPct < cleanLossPct {
-			facts = append(facts, fmt.Sprintf("%s: the direct route to the game server loses %.1f%% of pings.", pathWords(p, v), p.Direct.LossPct))
+			facts = append(facts, fmt.Sprintf("%s：游戏直连探测丢包 %.1f%%。", pathWords(p, v), p.Direct.LossPct))
 			traceClean = true
 		}
 	}
@@ -357,18 +357,18 @@ func (ispRule) check(v *view) (Check, *Verdict) {
 	switch {
 	case traceClean:
 		c.Status = CheckClear
-		c.Summary = "No loss persists along the route past your home network."
+		c.Summary = "家庭网络以外的线路未发现持续至终点的丢包。"
 	case t != nil && !t.Reached:
 		c.Status = CheckUnknown
-		c.Summary = "The last route trace didn't reach its destination, so loss on the way can't be confirmed. Trace one of your relays, or a game server that answers ping."
+		c.Summary = "上次追踪未抵达目标。请追踪一个中继或能回复探测的游戏服务器。"
 	case t != nil && v.homeLossHop() != nil:
 		c.Status = CheckUnknown
-		c.Summary = "Loss already starts inside your home network, so the ISP's route can't be judged until that is fixed."
+		c.Summary = "家庭网络内已出现丢包。待本地连接稳定后，再测量运营商线路。"
 	default:
 		c.Status = CheckUnknown
-		c.Summary = v.traceWhy + " Run a route trace."
+		c.Summary = v.traceWhy + " 请运行路由追踪。"
 		if v.traceWhy == "" {
-			c.Summary = "Run a route trace to a game server or one of your relays."
+			c.Summary = "请对游戏服务器或中继执行路由追踪。"
 		}
 	}
 	return c, nil
@@ -377,13 +377,13 @@ func (ispRule) check(v *view) (Check, *Verdict) {
 // ispVerdict is the ISP route verdict; boosting: a boost is running, so the
 // advice is to keep it on rather than to start one.
 func ispVerdict(conf Confidence, fact string, boosting bool) *Verdict {
-	advice := "Boost the game through a relay and compare ping and loss with the direct route on the game page. If it keeps happening, send the exported report to your ISP."
+	advice := "可在游戏页面对比加速和直连的延迟、丢包。若持续发生，可把导出的报告交给运营商。"
 	if boosting {
-		advice = "Keep the boost on: the relay route avoids the loss on the direct one. If it keeps happening, send the exported report to your ISP."
+		advice = "中继线路绕开了直连丢包，可继续使用加速。若持续发生，可把导出的报告交给运营商。"
 	}
 	return &Verdict{ID: VerdictISP, Segment: SegmentISP, Confidence: conf, LowpathHelps: true,
 		Title:  "运营商线路存在丢包",
-		Detail: "Loss starts past your home network, on the way to the destination, and carries on to the end. This is what a relay can route around.",
+		Detail: "丢包从家庭网络以外开始并延续到终点，中继可能绕开这一段。",
 		Advice: advice,
 		Facts:  []string{fact}}
 }
@@ -395,7 +395,7 @@ func traceHost(t *TraceResult) string {
 	case t.Target != "":
 		return t.Target
 	}
-	return "the target"
+	return "目标"
 }
 
 // pathWords says where path numbers come from: "During the Counter-Strike
@@ -403,19 +403,19 @@ func traceHost(t *TraceResult) string {
 func pathWords(p *PathEvidence, v *view) string {
 	game := p.Game
 	if game == "" {
-		game = "the game"
+		game = "游戏"
 	}
 	if p.Source == PathBoost {
-		return "During the " + game + " boost"
+		return game + " 加速期间"
 	}
-	return fmt.Sprintf("The route analysis for %s (%s ago)", game, ago(v.ev.At.Sub(p.At)))
+	return fmt.Sprintf("%s 的线路分析（%s前）", game, ago(v.ev.At.Sub(p.At)))
 }
 
 func methodFact(p *PathEvidence) string {
 	if p.SameMethod {
-		return "Both routes were measured the same way, to the same server."
+		return "两条线路使用同一方式测量同一台服务器。"
 	}
-	return "The direct route is measured with ICMP ping and the relay route with UDP probes, so the two aren't exactly alike."
+	return "直连采用 ICMP 探测，中继采用 UDP 探测，比较时需考虑协议差异。"
 }
 
 // serverRule: the route is clean up to the relay, and the relay's leg to
@@ -428,15 +428,15 @@ func (serverRule) check(v *view) (Check, *Verdict) {
 	var facts []string
 	vd := &Verdict{ID: VerdictServer, Segment: SegmentServer,
 		Title:  "游戏服务器一侧存在异常",
-		Detail: "Your connection and the route up to the relay are clean; the trouble is between the relay and the game server, or at the server itself. Neither you nor Lowpath can fix that.",
-		Advice: "Try another server or region in the game if it offers one, or check the game's server status page."}
+		Detail: "本机到中继的线路稳定，异常可能位于中继到游戏服务器之间，或游戏服务器本身。",
+		Advice: "可尝试切换游戏区服，或查看游戏服务器状态。"}
 	p := v.path
 	relayClean := p != nil && p.Relay != nil && p.Relay.Samples >= minPathSamples && p.Relay.LossPct < cleanLossPct && p.Relay.JitterMS < cleanJitterMS
 	if relayClean {
 		legLoss := p.ServerLossPct != nil && *p.ServerLossPct >= routeLossPct
 		legJitter := p.ServerJitterMS != nil && *p.ServerJitterMS >= badJitterMS
 		if legLoss || legJitter {
-			fact := fmt.Sprintf("%s: the relay leg loses %.1f%% with %.0f ms jitter; the relay's leg to the server loses %s%% with %s ms jitter.",
+			fact := fmt.Sprintf("%s：本机到中继丢包 %.1f%%，抖动 %.0f ms。中继到服务器丢包 %s%%，抖动 %s ms。",
 				pathWords(p, v), p.Relay.LossPct, p.Relay.JitterMS, pctText(p.ServerLossPct), msText(p.ServerJitterMS))
 			vd.Confidence = ConfidenceHigh
 			if p.Source == PathAnalysis {
@@ -452,38 +452,38 @@ func (serverRule) check(v *view) (Check, *Verdict) {
 			// rights, an older relay, a boost a few seconds old), and an ISP
 			// problem on the direct route would look the same.
 			vd.Confidence = ConfidenceLow
-			vd.Title = "The game server's end may be the problem"
-			vd.Detail = "The direct route to the game server loses pings while the route to your relay is clean, and the relay reports no time for its own leg to the server. The server's end is what both routes share, but this is a hint: a problem on your ISP's direct route would look the same."
-			vd.Advice = "Keep the boost on if the game feels better through the relay. Otherwise try another server or region in the game, or check the game's server status page."
+			vd.Title = "游戏服务器一侧可能存在异常"
+			vd.Detail = "游戏直连探测丢包，本机到中继的线路稳定，但中继未报告到服务器的延迟。游戏服务器一侧和运营商直连线路都可能存在异常。"
+			vd.Advice = "如果加速有改善，可继续使用。也可切换区服或查看游戏服务器状态。"
 			vd.Facts = []string{
-				fmt.Sprintf("%s: the direct route loses %.1f%% of pings to the game server, the route to the relay is clean (%.1f%% loss), and the relay reports no time to the server.",
+				fmt.Sprintf("%s：游戏直连探测丢包 %.1f%%，本机到中继丢包 %.1f%%，中继未报告到服务器的延迟。",
 					pathWords(p, v), p.Direct.LossPct, p.Relay.LossPct),
-				"The relay may be unable to ping the server, and servers often limit ping, so this is a hint rather than proof.",
+				"游戏服务器可能限制探测应答，这个结果只提供排查线索。",
 			}
 			c.Status, c.Facts, c.Summary = CheckFound, vd.Facts, vd.Title+"."
 			return c, vd
 		}
 	}
 	if t := v.trace; t != nil && v.ev.TraceKind == TraceKindServer && t.Reached && t.LossFrom != nil && *t.LossFrom == len(t.Hops) && t.End == nil {
-		facts = append(facts, fmt.Sprintf("Only the game server itself loses replies to the route trace (%.1f%%). Servers often limit ping, so this alone doesn't show a problem.", *t.DestLossPct))
+		facts = append(facts, fmt.Sprintf("仅游戏服务器探测超时（%.1f%%）。部分服务器会限制应答，仍需结合其他测量判断。", *t.DestLossPct))
 	}
 	switch {
 	case p != nil && p.Direct != nil && p.Direct.Samples >= minPathSamples && p.Direct.LossPct < cleanLossPct && p.Direct.JitterMS < badJitterMS:
-		facts = append(facts, fmt.Sprintf("%s: the game server answers %.1f%% of pings straight from your PC, with %.0f ms jitter.", pathWords(p, v), 100-p.Direct.LossPct, p.Direct.JitterMS))
+		facts = append(facts, fmt.Sprintf("%s：游戏服务器回复了本机 %.1f%% 的直连探测，抖动 %.0f ms。", pathWords(p, v), 100-p.Direct.LossPct, p.Direct.JitterMS))
 		c.Status = CheckClear
-		c.Summary = "The game server answers steadily."
+		c.Summary = "游戏服务器应答稳定。"
 	case p != nil && p.ServerLossPct != nil && *p.ServerLossPct < cleanLossPct && (p.ServerJitterMS == nil || *p.ServerJitterMS < badJitterMS):
 		c.Status = CheckClear
-		c.Summary = "The relay's leg to the game server is clean."
+		c.Summary = "中继到游戏服务器的链路表现稳定。"
 	case p != nil && p.Direct == nil:
 		c.Status = CheckUnknown
-		c.Summary = "The game server doesn't answer ping from your PC, so its end can't be measured directly."
+		c.Summary = "游戏服务器未回复本机探测。"
 	default:
 		c.Status = CheckUnknown
-		c.Summary = "Measure routes on a game's page, or boost a game."
+		c.Summary = "请在游戏页测量线路，或启动加速。"
 	}
 	if p != nil && p.ServerMS != nil {
-		facts = append(facts, fmt.Sprintf("The relay reaches the game server in %.0f ms (relays don't report that leg's loss yet).", *p.ServerMS))
+		facts = append(facts, fmt.Sprintf("中继到游戏服务器延迟 %.0f ms，该段丢包率暂无数据。", *p.ServerMS))
 	}
 	c.Facts = facts
 	return c, nil
@@ -499,15 +499,15 @@ func (optimalRule) check(v *view) (Check, *Verdict) {
 	switch {
 	case p == nil || p.Relay == nil:
 		c.Status = CheckUnknown
-		c.Summary = "No comparison of the direct route with a relay yet: measure routes on a game's page, or boost a game."
+		c.Summary = "暂无直连与中继的对照数据。请在游戏页测量线路或启动加速。"
 		return c, nil
 	case p.Direct == nil:
 		c.Status = CheckUnknown
-		c.Summary = "The game server doesn't answer ping, so the direct route can't be compared with the relay."
+		c.Summary = "游戏服务器未回复探测，暂时无法比较直连和中继。"
 		return c, nil
 	case p.Direct.Samples < minPathSamples || p.Relay.Samples < minPathSamples:
 		c.Status = CheckUnknown
-		c.Summary = "Too few measurements of the routes so far to compare them."
+		c.Summary = "线路样本太少，暂时无法比较。"
 		return c, nil
 	}
 	d := p.Direct
@@ -519,20 +519,20 @@ func (optimalRule) check(v *view) (Check, *Verdict) {
 	if p.ServerLossPct != nil {
 		relayLoss += *p.ServerLossPct
 	}
-	route := "the relay route"
+	route := "中继线路"
 	if !whole {
-		route = "the relay leg alone"
+		route = "仅本机到中继"
 	}
-	fact := fmt.Sprintf("%s: direct %.0f ms with %.1f%% loss, %s %.0f ms with %.1f%% loss.", pathWords(p, v), d.RTTMS, d.LossPct, route, relayMS, relayLoss)
+	fact := fmt.Sprintf("%s：直连 %.0f ms、丢包 %.1f%%，%s %.0f ms、丢包 %.1f%%。", pathWords(p, v), d.RTTMS, d.LossPct, route, relayMS, relayLoss)
 	facts := []string{fact, methodFact(p)}
 	// Without the relay's leg to the server the relay route is at least
-	// relayMS, so "direct is close enough" still holds; "the relay is
+	// relayMS, so "直连和中继差异很小" still holds; "the relay is
 	// better" can't be said.
 	if d.RTTMS <= relayMS+optimalMS && d.LossPct <= relayLoss {
 		vd := &Verdict{ID: VerdictOptimal, Segment: SegmentLowpath, Confidence: ConfidenceMedium,
 			Title:  "直连已经足够稳定",
-			Detail: fmt.Sprintf("Your direct route is within %d ms of the best relay route and loses no more, so a relay can't make this game feel better.", optimalMS),
-			Advice: "Play this game without boosting. Run the comparison again at a busy hour: evening congestion can change the answer.",
+			Detail: fmt.Sprintf("直连和最佳中继的延迟差在 %d ms 以内，且丢包率相当，预计加速改善有限。", optimalMS),
+			Advice: "当前可使用直连。晚高峰线路可能变化，届时可重新测量。",
 			Facts:  facts}
 		switch {
 		case p.SameMethod:
@@ -546,11 +546,11 @@ func (optimalRule) check(v *view) (Check, *Verdict) {
 	c.Facts = facts
 	if !whole {
 		c.Status = CheckUnknown
-		c.Summary = "The relay hasn't measured its leg to the game server yet, so the whole relay route can't be compared."
+		c.Summary = "中继到游戏服务器的延迟尚未测量，暂时无法比较完整线路。"
 		return c, nil
 	}
 	c.Status = CheckClear
-	c.Summary = "The relay route is better than the direct one: boosting helps this game."
+	c.Summary = "中继线路的测量结果优于直连。"
 	return c, nil
 }
 

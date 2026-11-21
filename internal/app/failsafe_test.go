@@ -71,7 +71,7 @@ func TestCaptureFailOpenEndsSession(t *testing.T) {
 	}
 	f := lv.Failsafe
 	if f == nil || f.Kind != "stopped" || f.GameID != gameID || f.Game != "LP Check" ||
-		!strings.Contains(f.Message, "normal connection") || !strings.Contains(f.Detail, "stuck") {
+		!strings.Contains(f.Message, "恢复直连") || !strings.Contains(f.Detail, "stuck") {
 		t.Fatalf("failsafe = %+v", f)
 	}
 	if _, ok, _ := marker.Load(); ok {
@@ -95,10 +95,10 @@ func TestFailOpenMessage(t *testing.T) {
 		err  error
 		want string
 	}{
-		{errors.New("capture stopped: a packet was stuck in the handler for 500ms"), "packet handling for Example Game stopped working"},
-		{fmt.Errorf("capture stopped: another program keeps removing the routing rule: %w", capture.ErrRouteRemoved), "another program (a network manager, VPN or firewall) removed the routing that sends Example Game"},
+		{errors.New("capture stopped: a packet was stuck in the handler for 500ms"), "Example Game 的游戏流量捕获停止"},
+		{fmt.Errorf("capture stopped: another program keeps removing the routing rule: %w", capture.ErrRouteRemoved), "其他网络程序移除了 Example Game 的加速路由"},
 	} {
-		if got := failOpenMessage(tc.err, "Example Game"); !strings.Contains(got, tc.want) || !strings.Contains(got, "normal connection") {
+		if got := failOpenMessage(tc.err, "Example Game"); !strings.Contains(got, tc.want) || !strings.Contains(got, "恢复直连") {
 			t.Errorf("%v: %q, want %q", tc.err, got, tc.want)
 		}
 	}
@@ -107,7 +107,7 @@ func TestFailOpenMessage(t *testing.T) {
 	srv, c, _ := startRouteSession(t, fp)
 	c.Fail(fmt.Errorf("capture stopped: another program removed the routing rule and putting it back failed: %w", capture.ErrRouteRemoved))
 	lv := waitLive(t, srv, func(lv liveView) bool { return lv.Session == nil })
-	if f := lv.Failsafe; f == nil || f.Kind != "stopped" || !strings.Contains(f.Message, "removed the routing") || !strings.Contains(f.Detail, "putting it back failed") {
+	if f := lv.Failsafe; f == nil || f.Kind != "stopped" || !strings.Contains(f.Message, "移除了") || !strings.Contains(f.Detail, "putting it back failed") {
 		t.Fatalf("failsafe = %+v", f)
 	}
 }
@@ -165,8 +165,8 @@ func TestRecoverLeftoverAtStart(t *testing.T) {
 		t.Error("marker still there")
 	}
 	f := srv.live().Failsafe
-	if f == nil || f.Kind != "recovered" || f.Game != "Counter-Strike 2" || !strings.Contains(f.Message, "closed unexpectedly") ||
-		!strings.Contains(f.Message, "went back to your normal connection") || f.Detail != "" {
+	if f == nil || f.Kind != "recovered" || f.Game != "反恐精英 2" || !strings.Contains(f.Message, "意外退出") ||
+		!strings.Contains(f.Message, "恢复直连") || f.Detail != "" {
 		t.Fatalf("failsafe = %+v", f)
 	}
 }
@@ -208,7 +208,7 @@ func TestRecoverLeftoverFailureIsReported(t *testing.T) {
 	_, srv := newRealServer(t, fp, withMarker(marker))
 	f := srv.live().Failsafe
 	if f == nil || !strings.Contains(f.Detail, "could not be removed") || !strings.Contains(f.Message, "a game") ||
-		strings.Contains(f.Message, "went back") || !strings.Contains(f.Message, "may not be back to normal") {
+		strings.Contains(f.Message, "恢复直连") || !strings.Contains(f.Message, "路由清理尚未完成") {
 		t.Fatalf("failsafe = %+v", f)
 	}
 }
@@ -223,7 +223,7 @@ func TestRecoverLeftoverOtherBackend(t *testing.T) {
 	if got := fp.Capture.Recovered(); len(got) != 0 {
 		t.Fatalf("Recover called for another backend: %+v", got)
 	}
-	if f := srv.live().Failsafe; f == nil || !strings.Contains(f.Detail, `"tun"`) || strings.Contains(f.Message, "went back") {
+	if f := srv.live().Failsafe; f == nil || !strings.Contains(f.Detail, `"tun"`) || strings.Contains(f.Message, "恢复直连") {
 		t.Fatalf("failsafe = %+v", f)
 	}
 }

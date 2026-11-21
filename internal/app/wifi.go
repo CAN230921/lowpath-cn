@@ -163,7 +163,7 @@ func (w *wifiWatch) current(wait time.Duration) wifiView {
 	// Still waiting: an old reading would show numbers that may no longer
 	// hold, so say why there is none instead.
 	if w.inflight == done && (w.last == nil || time.Since(w.last.At) > w.callTimeout) {
-		return wifiView{At: time.Now(), State: wifiError, Message: "The system's Wi-Fi service isn't answering, so there is no current reading."}
+		return wifiView{At: time.Now(), State: wifiError, Message: "系统 Wi-Fi 服务未响应，暂无读数。"}
 	}
 	return *w.last
 }
@@ -176,12 +176,12 @@ func (w *wifiWatch) read(done chan struct{}) {
 	case err == nil:
 		v.State, v.Link, v.InUse = wifiOK, &l, index > 0
 		if kind != diag.LinkWiFi && kind != "" {
-			v.Message = "This Wi-Fi connection isn't carrying your internet traffic now: " + routeWords(kind) + " is."
+			v.Message = "当前互联网出口由 " + routeWords(kind) + " 承载。"
 		}
 	default:
 		v.State, v.Message = wifiState(err)
 		if kind == diag.LinkEthernet && v.State != wifiError {
-			v.Message = "This PC reaches the internet over a cable, so Wi-Fi doesn't affect your games now."
+			v.Message = "本机当前通过有线网络联网。"
 		}
 		if v.State == wifiError {
 			w.log.Warn("read Wi-Fi link", "err", err)
@@ -197,11 +197,11 @@ func (w *wifiWatch) read(done chan struct{}) {
 func routeWords(kind string) string {
 	switch kind {
 	case diag.LinkEthernet:
-		return "a cable"
+		return "有线网络"
 	case diag.LinkOther:
-		return "a VPN or another link"
+		return "VPN 或其他连接"
 	}
-	return "another connection"
+	return "其他连接"
 }
 
 // wifiState words a reader error for the card.
@@ -370,7 +370,7 @@ func tuneView(st diag.WiFiTuningState) wifiTuneView {
 		v.State = tunePartial
 	default:
 		v.State = tuneFailed
-		v.Message = "Neither setting could be applied."
+		v.Message = "两项 Wi-Fi 设置均未能应用。"
 	}
 	return v
 }

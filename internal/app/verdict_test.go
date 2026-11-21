@@ -71,7 +71,7 @@ func TestVerdictAPIWiFiAndReport(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("report: %d %s", code, body)
 	}
-	for _, want := range []string{"Lowpath diagnosis", "VERDICT: Your Wi-Fi is the problem (confidence: medium)", "5 of 50 pings lost", "Connection: Wi-Fi."} {
+	for _, want := range []string{"Lowpath 诊断报告", "诊断结论：Wi-Fi 连接异常（可信度：中）", "5/50 次超时", "连接：Wi-Fi。"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("report lacks %q:\n%s", want, body)
 		}
@@ -125,7 +125,7 @@ func TestVerdictAPIISPRouteFromTrace(t *testing.T) {
 		t.Fatal(err)
 	}
 	f := func(v float64) *float64 { return &v }
-	tr := diag.TraceResult{FinishedAt: time.Now().Add(-time.Minute), Target: "198.51.100.20", Host: "Counter-Strike 2 server", Mode: diag.TraceICMP,
+	tr := diag.TraceResult{FinishedAt: time.Now().Add(-time.Minute), Target: "198.51.100.20", Host: "反恐精英 2 server", Mode: diag.TraceICMP,
 		Rounds: 200, Planned: 200, Reached: true, DestLossPct: f(4), LossFrom: func() *int { v := 3; return &v }(),
 		Hops: []diag.TraceHop{
 			{TTL: 1, Addr: "192.168.1.1", Private: true, Sent: 200, Recv: 200},
@@ -144,7 +144,7 @@ func TestVerdictAPIISPRouteFromTrace(t *testing.T) {
 		t.Fatalf("verdict %+v", d.Verdict)
 	}
 	// The trace is redacted before it reaches the verdict: no host names.
-	if f := strings.Join(d.Verdict.Facts, " "); strings.Contains(f, "example.net") || !strings.Contains(f, "hop 3") {
+	if f := strings.Join(d.Verdict.Facts, " "); strings.Contains(f, "example.net") || !strings.Contains(f, "第 3 跳") {
 		t.Errorf("facts %q", f)
 	}
 }
@@ -230,7 +230,7 @@ func TestVerdictAPIAlreadyOptimalFromAnalysis(t *testing.T) {
 	if d.Verdict.ID != diag.VerdictOptimal {
 		t.Fatalf("verdict %+v", d.Verdict)
 	}
-	if f := strings.Join(d.Verdict.Facts, " "); !strings.Contains(f, "Counter-Strike 2") {
+	if f := strings.Join(d.Verdict.Facts, " "); !strings.Contains(f, "反恐精英 2") {
 		t.Errorf("facts %q", f)
 	}
 }
