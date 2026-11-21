@@ -452,6 +452,9 @@ func (s *Server) scanRunning() {
 func (s *Server) Handler() http.Handler {
 	mux := s.routes()
 	mux.HandleFunc("GET "+pathSession, s.auth.handleSession)
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
+		writeErr(w, http.StatusNotFound, "not_found", errors.New("接口不存在"))
+	})
 	if s.ui != nil {
 		mux.Handle("/", spa(s.ui))
 	}
