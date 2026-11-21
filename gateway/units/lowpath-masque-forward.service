@@ -1,0 +1,18 @@
+[Unit]
+Description=Lowpath loopback forwarding for the HTTP/3 gateway
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+DynamicUser=yes
+EnvironmentFile=/etc/lowpath-masque/site
+ExecStart=/usr/local/bin/lowpath-relay -listen 127.0.0.1:42180 -forward ${LOWPATH_TRANSIT}
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

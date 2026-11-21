@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#201d18">
+  <title>山河寻迹</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font: 16px/1.5 "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      background: #201d18;
+      color: #fff0d7;
+      --muted: #dfc9ac;
+      --gold: #ffd690;
+      --line: #745947;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(ellipse at 30% 10%, #573024, transparent 66%);
+    }
+    .landscape {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .ridge {
+      position: absolute;
+      inset: 24% -4% 0;
+      background: linear-gradient(#9a6b51, #473b2f 54%, #28231c);
+      opacity: .32;
+      clip-path: polygon(0 27%, 7% 21%, 13% 29%, 21% 16%, 31% 26%, 39% 38%, 49% 36%,
+        56% 27%, 63% 31%, 71% 17%, 77% 23%, 84% 16%, 93% 31%, 100% 23%, 100% 100%, 0 100%);
+    }
+    .ridge.near {
+      inset: 40% -4% 0;
+      background: linear-gradient(#72674e, #3b3a2f 49%, #23261f);
+      opacity: .75;
+      clip-path: polygon(0 19%, 9% 29%, 14% 25%, 22% 39%, 31% 38%, 41% 54%, 51% 45%,
+        60% 51%, 70% 26%, 77% 18%, 83% 26%, 91% 13%, 100% 23%, 100% 100%, 0 100%);
+    }
+    .river {
+      position: absolute;
+      left: -3%;
+      top: 48%;
+      width: 106%;
+      height: 57%;
+    }
+    .mist {
+      position: absolute;
+      inset: 0;
+      transform: translate3d(var(--mist-x, 0), var(--mist-y, 0), 0);
+    }
+    .cloud {
+      position: absolute;
+      width: 76%;
+      height: 27%;
+      background: radial-gradient(ellipse 24% 38% at 25% 56%, #c6ac8e30, transparent),
+        radial-gradient(ellipse 31% 32% at 53% 40%, #dec5a53d, transparent),
+        radial-gradient(ellipse 22% 36% at 75% 49%, #ae9e8a2d, transparent);
+      animation: cloud-drift 39s ease-in-out infinite alternate;
+    }
+    .cloud:first-child { top: 11%; left: -20%; }
+    .cloud:last-child { top: 58%; left: 38%; animation-duration: 54s; animation-delay: -28s; }
+    .mist.paused .cloud { animation-play-state: paused; }
+    @keyframes cloud-drift {
+      from { transform: translate3d(-12%, -4%, 0); }
+      to { transform: translate3d(19%, 5%, 0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .cloud { animation: none; }
+    }
+    main {
+      position: relative;
+      width: min(100% - 2rem, 65rem);
+      margin: auto;
+      padding: clamp(1.2rem, 7vh, 5rem) 0 2rem;
+      display: grid;
+      grid-template-columns: 1fr minmax(0, 30rem);
+      gap: clamp(1.5rem, 6vw, 5rem);
+      align-items: center;
+    }
+    h1 {
+      margin: .35rem 0 .8rem;
+      font: 700 clamp(2.55rem, 6vw, 4.5rem)/1.14 "Songti SC", "Noto Serif CJK SC", serif;
+      letter-spacing: -.035em;
+    }
+    p { margin: .5rem 0; }
+    .date, .rules, .legend, .metrics dt { color: var(--muted); }
+    .date { font-size: .82rem; letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+    .rules { max-width: 24rem; margin-top: .9rem; }
+    .metrics { display: flex; gap: clamp(1.25rem, 4vw, 3rem); margin: 1.8rem 0; }
+    .metrics dt { font-size: .8rem; }
+    .metrics dd { margin: .12rem 0 0; font: 600 1.7rem/1.2 ui-monospace, monospace; }
+    .legend { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; font-size: .78rem; }
+    .legend b { margin-right: .25rem; color: var(--gold); }
+    .chart {
+      border: 1px solid var(--line);
+      background: #29271e;
+      border-radius: 1.12rem;
+      padding: clamp(.65rem, 2.2vw, 1.15rem);
+      box-shadow: 0 18px 55px #0c0b0866;
+    }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: clamp(2px, .65vw, 5px);
+    }
+    button { font: inherit; cursor: pointer; color: inherit; }
+    button:focus-visible, .board:focus-visible { outline: 2px solid #fff0b6; outline-offset: 2px; }
+    .cell {
+      aspect-ratio: 1;
+      min-width: 0;
+      padding: 0;
+      border: 1px solid #59604a;
+      border-radius: .32rem;
+      background: #393e32;
+      font: 700 clamp(.85rem, 3vw, 1.5rem)/1 system-ui, sans-serif;
+      touch-action: manipulation;
+    }
+    .cell.reef { background: repeating-linear-gradient(140deg, #46413b 0 4px, #39342f 4px 8px); border-color: #64564c; }
+    .cell.trail { background: #4f5941; }
+    .cell.reachable { border-color: #b4a27a; background: #535841; }
+    .cell.reachable:hover { background: #66694c; }
+    .cell.beacon { color: #f8cd83; }
+    .cell.port { color: #f5bbaf; }
+    .cell.collected { color: #c7ba94; }
+    .cell.boat { background: var(--gold); border-color: var(--gold); color: #3f260e; }
+    .actions { display: flex; gap: .55rem; justify-content: flex-end; margin-top: 1rem; }
+    .actions button {
+      border: 1px solid #856554;
+      background: #52352a;
+      border-radius: .45rem;
+      padding: .5rem .95rem;
+      font-size: .86rem;
+    }
+    .actions button:hover:not(:disabled) { background: #6a4435; }
+    .actions button:disabled { opacity: .52; cursor: default; }
+    #status { min-height: 1.6em; font-size: .86rem; color: var(--gold); margin-bottom: 0; }
+    @media (max-width: 720px) {
+      main { grid-template-columns: 1fr; max-width: 30rem; gap: 1rem; }
+      .metrics { margin: 1rem 0; }
+      .river { left: -25%; top: 24%; width: 135%; height: 80%; }
+    }
+  </style>
+  <script src="/game.js" defer></script>
+</head>
+<body>
+  <div class="landscape" aria-hidden="true">
+    <div class="ridge"></div>
+    <div class="ridge near"></div>
+    <canvas class="river" id="river"></canvas>
+    <div class="mist" id="mist"><div class="cloud"></div><div class="cloud"></div></div>
+  </div>
+  <main>
+    <header>
+      <p class="date" id="date">每日挑战</p>
+      <h1>山河寻迹</h1>
+      <p>长城蜿蜒，黄河奔流，桂林山水如画。</p>
+      <p class="rules" id="rules">走访长城、黄河与桂林，再到驿站。点击相邻格子，或用方向键移动。</p>
+      <dl class="metrics">
+        <div><dt>步数</dt><dd id="steps">0</dd></div>
+        <div><dt>已走访</dt><dd id="beacons">0/3</dd></div>
+        <div><dt>最佳</dt><dd id="best">—</dd></div>
+      </dl>
+      <div class="legend">
+        <span><b>长</b>长城</span><span><b>河</b>黄河</span><span><b>桂</b>桂林</span><span><b>驿</b>驿站</span>
+      </div>
+    </header>
+    <section class="chart" aria-label="山河棋盘">
+      <div class="board" id="board" tabindex="0" aria-label="八乘八山河棋盘" aria-describedby="rules"></div>
+      <div class="actions">
+        <button type="button" id="undo" disabled>撤销</button>
+        <button type="button" id="reset" disabled>重开</button>
+      </div>
+      <p id="status" role="status">正在加载今日地图…</p>
+      <noscript>请启用 JavaScript 后开始游戏。</noscript>
+    </section>
+  </main>
+</body>
+</html>

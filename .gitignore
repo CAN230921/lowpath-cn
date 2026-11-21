@@ -1,0 +1,23 @@
+/bin/
+/dist/
+/ui/node_modules/
+/ui/dist/*
+!/ui/dist/placeholder/
+/.claude/devdata/
+*.exe
+launch.json
+/e2e/node_modules/
+/e2e/out/
+/.claude/
+IDEA.docx
+/.ci/
+*.tsbuildinfo
+# User configuration, device credentials and separately obtained drivers.
+github-oauth.json
+*.local.json
+*.pem
+*.key
+.env
+/internal/divert/bin/WinDivert.dll
+/internal/divert/bin/WinDivert64.sys
+/accelerator
