@@ -24,7 +24,6 @@ package main
 
 import (
 	"context"
-	_ "embed"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -40,6 +39,7 @@ import (
 	"strings"
 	"time"
 
+	"lowpath/cmd/lowpath/winres"
 	"lowpath/internal/app"
 	"lowpath/internal/compat"
 	"lowpath/internal/diag"
@@ -65,12 +65,6 @@ type options struct {
 	serviceNote string
 	wifiReading string
 }
-
-// appIcon is the app's icon for the windows and the app menu on Linux and
-// macOS (Windows takes it from the exe's resources).
-//
-//go:embed winres/icon.png
-var appIcon []byte
 
 func main() {
 	plat := platform.Native()
@@ -107,7 +101,7 @@ func main() {
 		// adapter is never read or tuned.
 		plat.WiFi = diag.NewFileWLAN(o.wifiReading)
 	}
-	desk := platform.NewDesktop(platform.DesktopConfig{ProfileDir: windowProfile(plat), Icon: appIcon})
+	desk := platform.NewDesktop(platform.DesktopConfig{ProfileDir: windowProfile(plat), Icon: winres.Icon})
 
 	if err := run(context.Background(), o, plat, desk, platform.NewInstance(o.addr)); err != nil {
 		slog.Error("fatal", "err", err)

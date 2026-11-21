@@ -17,6 +17,8 @@ import (
 
 func main() {
 	out := flag.String("out", "Lowpath.app", "bundle folder to write (replaced if it exists), or a .zip archive of it")
+	name := flag.String("name", "Lowpath", "application name in Finder")
+	id := flag.String("id", "io.github.omdezo.lowpath", "macOS bundle identifier")
 	icon := flag.String("icon", "cmd/lowpath/winres/icon.png", "app icon, a 256x256 PNG")
 	version := flag.String("version", "0.0.0", "version shown in Finder")
 	flag.Parse()
@@ -29,7 +31,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	b := Bundle{Name: "Lowpath", Executable: "lowpath", ID: "io.github.omdezo.lowpath", Version: *version, Icon: png}
+	if *name == "" || strings.ContainsAny(*name, `/\`) || *name == "." || *name == ".." || *id == "" {
+		fmt.Fprintln(os.Stderr, "invalid macOS app name or bundle identifier")
+		os.Exit(2)
+	}
+	b := Bundle{Name: *name, Executable: "lowpath", ID: *id, Version: *version, Icon: png}
 	if err := write(b, *out, flag.Args()); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

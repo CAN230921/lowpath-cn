@@ -17,12 +17,17 @@ import (
 	"syscall"
 	"time"
 
+	"lowpath/cmd/lowpath/winres"
 	"lowpath/internal/app"
 	"lowpath/internal/capture"
 	"lowpath/internal/managed"
 	"lowpath/internal/platform"
 	"lowpath/ui"
 )
+
+// Packaged deployments can set connection defaults at build time. Flags still
+// override the defaults, and ordinary source builds require a gateway URL.
+var defaultGateway, defaultGatewayIP, defaultUplink string
 
 func main() {
 	if err := run(); err != nil {
@@ -31,9 +36,9 @@ func main() {
 }
 
 func run() error {
-	gateway := flag.String("gateway", os.Getenv("LOWPATH_GATEWAY"), "HTTPS MASQUE gateway origin")
-	ip := flag.String("gateway-ip", "", "optional IPv4 override, retaining hostname and certificate checks")
-	uplink := flag.String("uplink", "", "macOS physical interface for gateway traffic")
+	gateway := flag.String("gateway", firstGateway(), "HTTPS MASQUE gateway origin")
+	ip := flag.String("gateway-ip", defaultGatewayIP, "optional IPv4 override, retaining hostname and certificate checks")
+	uplink := flag.String("uplink", defaultUplink, "macOS physical interface for gateway traffic")
 	data := flag.String("data", "", "desktop settings directory")
 	targetFlag := flag.String("test-target", "", "dedicated UDP test server IPv4:port")
 	route := flag.Bool("test-route", false, "route only the dedicated test host via macOS utun (administrator required)")
@@ -112,7 +117,7 @@ func run() error {
 			return err
 		}
 	}
-	desktop := platform.NewDesktop(platform.DesktopConfig{ProfileDir: filepath.Join(*data, "webview")})
+	desktop := platform.NewDesktop(platform.DesktopConfig{ProfileDir: filepath.Join(*data, "webview"), Icon: winres.Icon})
 	login := &managed.Login{Network: network}
 	svc, err := app.NewServer(app.Config{Store: store, Games: games, Network: network, Platform: plat,
 		UI: assets, ArtDir: filepath.Join(*data, "art"), Marker: capture.NewMarkerFile(filepath.Join(*data, "capture.json")), ExtraAPI: login.Mount})
@@ -148,4 +153,11 @@ func run() error {
 	case err := <-done:
 		return err
 	}
+}
+
+func firstGateway() string {
+	if value := os.Getenv("LOWPATH_GATEWAY"); value != "" {
+		return value
+	}
+	return defaultGateway
 }
