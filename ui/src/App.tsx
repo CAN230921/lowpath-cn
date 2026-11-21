@@ -95,6 +95,30 @@ export function App() {
     load();
   }, [load]);
 
+  const managedSignedIn = phase === "main" && account?.signed_in === true;
+  useEffect(() => {
+    if (!managedSignedIn) return;
+    let stopped = false;
+    const timer = window.setInterval(async () => {
+      try {
+        const next = await api.account();
+        if (stopped) return;
+        setAccount(next);
+        if (!next.signed_in) {
+          setLive(null);
+          setShowSettings(null);
+          setPhase("login");
+        }
+      } catch {
+        // The desktop service can be temporarily unreachable after sleep.
+      }
+    }, 60_000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [managedSignedIn]);
+
   // After the service comes back (for example restarted as administrator),
   // platform, relays and settings may have changed under us.
   useEffect(() => {
@@ -239,12 +263,12 @@ export function App() {
       setLive(null);
       setShowSettings(null);
       await load();
-    } catch {
-      onError("退出登录失败，请重试。");
+    } catch (e) {
+      onError(describeError(e, "退出登录失败，请重试。").msg);
     }
   };
 
-  if (phase === "login") return <Login onSuccess={load} />;
+  if (phase === "login") return <Login account={account} onSuccess={load} />;
 
   if (phase === "loading") {
     return (
@@ -340,6 +364,7 @@ export function App() {
       />
 
       <main className="main">
+        {account?.notice && <div className="main-banner" role="status">{account.notice}</div>}
         {down && (
           <div className="banner banner-bad" style={{ margin: "16px 28px 0" }}>
             <WifiOff size={16} /> 已断开与 Lowpath 服务的连接，正在重连…

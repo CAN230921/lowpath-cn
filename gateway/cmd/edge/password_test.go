@@ -96,3 +96,85 @@ func TestPasswordAttemptsAreLimitedBySource(t *testing.T) {
 		t.Fatal("login limit did not isolate sources or reset after its window")
 	}
 }
+
+func TestRememberedLoginRefreshAndRevocation(t *testing.T) {
+	accounts := t.TempDir()
+	const name = "remember-test"
+	const password = "remember-test-only"
+	if err := access.CreateAccount(accounts, name, []byte(password), []string{"tokyo"}); err != nil {
+		t.Fatal(err)
+	}
+	rt, err := newRoutes([]nodeSpec{{ID: "tokyo", Name: "东京"}, {ID: "seoul", Name: "首尔"}}, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rt.configurePasswords(accounts, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	rt.mount(mux, "gateway.example")
+	call := func(method, path, key, body string, want int) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(method, "https://gateway.example"+path, strings.NewReader(body))
+		if key != "" {
+			r.Header.Set("Authorization", "Bearer "+key)
+		}
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
+		if w.Code != want {
+			t.Fatalf("%s %s: HTTP %d, want %d", method, path, w.Code, want)
+		}
+		return w
+	}
+	readGrant := func(w *httptest.ResponseRecorder) loginResponse {
+		t.Helper()
+		var g loginResponse
+		if err := json.NewDecoder(w.Body).Decode(&g); err != nil || g.Name != name || g.Credential == "" {
+			t.Fatal("missing login grant")
+		}
+		return g
+	}
+	login := func() loginResponse {
+		t.Helper()
+		return readGrant(call("POST", "/api/v1/login/password", "", `{"username":"`+name+`","password":"`+password+`","remember":true}`, 200))
+	}
+	old := login()
+	if old.RememberToken == "" || old.RememberToken == old.Credential {
+		t.Fatal("expected a separate refresh credential")
+	}
+	call("GET", "/api/v1/nodes", old.RememberToken, "", 401)
+	call("POST", "/api/v1/login/refresh", old.Credential, "", 401)
+	refreshed := readGrant(call("POST", "/api/v1/login/refresh", old.RememberToken, "", 200))
+	if refreshed.RememberToken != "" || refreshed.Credential == old.Credential {
+		t.Fatal("refresh should issue only a new access credential")
+	}
+	directory := call("GET", "/api/v1/nodes", refreshed.Credential, "", 200)
+	if strings.Contains(directory.Body.String(), `"id":"seoul"`) || !strings.Contains(directory.Body.String(), `"id":"tokyo"`) {
+		t.Fatal("node permissions changed at refresh")
+	}
+	grant, ok := rt.authenticate("Bearer "+refreshed.Credential, time.Now())
+	if !ok || grant.LoginID == "" || !rt.stillValid(grant, "tokyo", time.Now()) {
+		t.Fatal("refreshed grant did not authorize a tunnel")
+	}
+	call("POST", "/api/v1/login/logout", old.RememberToken, "", 204)
+	call("POST", "/api/v1/login/refresh", old.RememberToken, "", 401)
+	call("GET", "/api/v1/nodes", old.Credential, "", 401)
+	call("GET", "/api/v1/nodes", refreshed.Credential, "", 401)
+	if rt.stillValid(grant, "tokyo", time.Now()) {
+		t.Fatal("logout did not revoke the existing tunnel's grant")
+	}
+	old = login()
+	call("POST", "/api/v1/login/logout", old.Credential, "", 204)
+	call("POST", "/api/v1/login/refresh", old.RememberToken, "", 401)
+	account, err := access.ReadAccount(accounts, name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expired, err := access.IssueDevice(rt.passwords.logins, access.Device{
+		Label: name, AccountRevision: account.Revision, ExpiresAt: time.Now().Add(-time.Minute),
+	}, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	call("POST", "/api/v1/login/refresh", expired, "", 401)
+}

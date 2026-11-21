@@ -119,6 +119,9 @@ func run() error {
 	}
 	desktop := platform.NewDesktop(platform.DesktopConfig{ProfileDir: filepath.Join(*data, "webview"), Icon: winres.Icon})
 	login := &managed.Login{Network: network}
+	if !*credential && !*route {
+		login.Store = network.SystemCredentialStore()
+	}
 	svc, err := app.NewServer(app.Config{Store: store, Games: games, Network: network, Platform: plat,
 		UI: assets, ArtDir: filepath.Join(*data, "art"), Marker: capture.NewMarkerFile(filepath.Join(*data, "capture.json")), ExtraAPI: login.Mount})
 	if err != nil {

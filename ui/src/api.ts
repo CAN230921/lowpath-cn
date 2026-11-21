@@ -62,11 +62,18 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 
 const enc = encodeURIComponent;
 
-export type Account = { signed_in: boolean; name: string; expires_at: string };
+export type Account = {
+  signed_in: boolean;
+  name: string;
+  expires_at: string;
+  can_remember?: boolean;
+  restore_pending?: boolean;
+  notice?: string;
+};
 
 export const api = {
   account: () => call<Account>("GET", "/account"),
-  passwordLogin: (username: string, password: string) => call<Account>("POST", "/account/password", { username, password }),
+  passwordLogin: (username: string, password: string, remember: boolean) => call<Account>("POST", "/account/password", { username, password, remember }),
   logout: () => call<Account>("POST", "/account/logout"),
   bootstrap: () => call<Bootstrap>("GET", "/bootstrap"),
   mapping: () => call<Mapping>("POST", "/mapping"),

@@ -2055,4 +2055,5 @@ select.input {
 .login h1 { margin: 8px 0; font-size: 24px; }
 .login p { margin: 0; }
 .login form { display: grid; gap: 8px; text-align: left; }
-.login input { width: 100%; }
+.login input:not([type="checkbox"]) { width: 100%; }
+.login-remember { display: flex; align-items: center; gap: 8px; }

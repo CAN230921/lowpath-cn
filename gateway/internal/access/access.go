@@ -26,6 +26,7 @@ type Device struct {
 	Nodes           []string  `json:"nodes"`
 	ExpiresAt       time.Time `json:"expires_at"`
 	AccountRevision string    `json:"account_revision,omitempty"`
+	LoginID         string    `json:"login_id,omitempty"`
 }
 
 type Grant struct {
@@ -92,7 +93,7 @@ func Authenticate(dir, header string, now time.Time) (Grant, bool) {
 	if !ok || !ValidDevice(id) || len(secret) != 64 {
 		return Grant{}, false
 	}
-	record, err := read(dir, id)
+	record, err := ReadDevice(dir, id)
 	if err != nil || !now.Before(record.ExpiresAt) {
 		return Grant{}, false
 	}
@@ -107,15 +108,15 @@ func Authenticate(dir, header string, now time.Time) (Grant, bool) {
 func (g Grant) Allows(node string) bool { return slices.Contains(g.Nodes, node) }
 
 func (g Grant) StillValid(dir, node string, now time.Time) bool {
-	record, err := read(dir, g.ID)
+	record, err := ReadDevice(dir, g.ID)
 	return err == nil && now.Before(g.ExpiresAt) && now.Before(record.ExpiresAt) &&
 		record.Digest == g.Digest && slices.Contains(record.Nodes, node)
 }
 
-func read(dir, id string) (Device, error) {
+func ReadDevice(dir, id string) (Device, error) {
 	var record Device
-	if dir == "" {
-		return record, errors.New("device registry disabled")
+	if dir == "" || !ValidDevice(id) {
+		return record, errors.New("invalid device registry or ID")
 	}
 	raw, err := os.ReadFile(Path(dir, id))
 	if err != nil {
