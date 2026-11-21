@@ -7,13 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	masque "github.com/quic-go/masque-go"
@@ -42,7 +42,7 @@ type Directory struct {
 type Network struct {
 	origin  *url.URL
 	peer    string
-	control func(string, string, syscall.RawConn) error
+	uplinks uplinkSelector
 	client  *http.Client
 	gameID  string
 	target  netip.AddrPort
@@ -69,27 +69,36 @@ func New(origin, ip, uplink, gameID string, target netip.AddrPort) (*Network, er
 		}
 		host = ip
 	}
-	var ctrl func(string, string, syscall.RawConn) error
-	if uplink != "" {
-		iface, err := net.InterfaceByName(uplink)
-		if err != nil {
-			return nil, err
-		}
-		ctrl = func(_, _ string, socket syscall.RawConn) error { return bindInterface(socket, iface.Index) }
+	choose, err := selectUplink(uplink)
+	if err != nil {
+		return nil, err
 	}
-	n := &Network{origin: u, peer: net.JoinHostPort(host, port), control: ctrl, gameID: gameID, target: target}
-	dialer := &net.Dialer{Control: ctrl, Timeout: dialTimeout}
+	n := &Network{origin: u, peer: net.JoinHostPort(host, port), uplinks: choose, gameID: gameID, target: target}
 	n.client = &http.Client{
 		Timeout:       dialTimeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13},
-			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return dialer.DialContext(ctx, "tcp4", n.peer)
-			},
+			TLSClientConfig:   &tls.Config{MinVersion: tls.VersionTLS13},
+			DialContext:       n.dialGatewayTCP,
+			DisableKeepAlives: uplink == "auto", // a new request can use the new network after switching
 		},
 	}
 	return n, nil
+}
+
+func (n *Network) dialGatewayTCP(ctx context.Context, _, _ string) (net.Conn, error) {
+	uplinks, err := n.uplinks()
+	if err != nil {
+		return nil, err
+	}
+	return tryUplinks(ctx, uplinks, func(attempt context.Context, adapter net.Interface) (net.Conn, error) {
+		dialer := net.Dialer{Control: socketControl(adapter.Index), Timeout: dialTimeout}
+		conn, err := dialer.DialContext(attempt, "tcp4", n.peer)
+		if err == nil && adapter.Name != "" {
+			slog.Info("gateway socket connected", "transport", "tcp", "interface", adapter.Name)
+		}
+		return conn, err
+	})
 }
 
 func (n *Network) Demo() bool { return false }
@@ -198,43 +207,68 @@ func continent(node string) string {
 	}
 }
 
-func (n *Network) open(ctx context.Context, key, template, target string) (_ net.Conn, err error) {
+func (n *Network) open(ctx context.Context, key, template, target string) (net.Conn, error) {
 	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
 	peer, err := net.ResolveUDPAddr("udp4", n.peer)
 	if err != nil {
 		return nil, err
 	}
-	config := net.ListenConfig{Control: n.control}
-	socket, err := config.ListenPacket(ctx, "udp4", "0.0.0.0:0")
+	uplinks, err := n.uplinks()
 	if err != nil {
 		return nil, err
 	}
-	transport := &quic.Transport{Conn: socket}
-	defer func() {
-		if err != nil {
-			transport.Close()
-			socket.Close()
+	gateway, err := tryUplinks(ctx, uplinks, func(attempt context.Context, adapter net.Interface) (quicGateway, error) {
+		conn, err := n.dialGatewayQUIC(attempt, peer, adapter.Index)
+		if err == nil && adapter.Name != "" {
+			slog.Info("gateway socket connected", "transport", "quic", "interface", adapter.Name)
 		}
-	}()
-	conn, err := transport.Dial(ctx, peer, &tls.Config{ServerName: n.origin.Hostname(), NextProtos: []string{http3.NextProtoH3}, MinVersion: tls.VersionTLS13},
-		&quic.Config{EnableDatagrams: true, HandshakeIdleTimeout: dialTimeout, KeepAlivePeriod: 20 * time.Second})
+		return conn, err
+	})
 	if err != nil {
 		return nil, err
 	}
 	h3 := &http3.Transport{EnableDatagrams: true}
 	req, err := masque.NewRequest(ctx, uritemplate.MustNew(template), target)
 	if err != nil {
+		h3.Close()
+		gateway.close()
 		return nil, err
 	}
 	req.Header().Set("Authorization", "Bearer "+key)
-	udp, _, err := masque.NewClientConn(h3.NewClientConn(conn)).Dial(req)
+	udp, _, err := masque.NewClientConn(h3.NewClientConn(gateway.conn)).Dial(req)
 	if err != nil {
+		h3.Close()
+		gateway.close()
 		return nil, err
 	}
 	return &tunnel{Conn: udp, closeTransport: func() {
-		conn.CloseWithError(0, "")
 		h3.Close()
+		gateway.close()
+	}}, nil
+}
+
+type quicGateway struct {
+	conn  *quic.Conn
+	close func()
+}
+
+func (n *Network) dialGatewayQUIC(ctx context.Context, peer *net.UDPAddr, index int) (quicGateway, error) {
+	config := net.ListenConfig{Control: socketControl(index)}
+	socket, err := config.ListenPacket(ctx, "udp4", "0.0.0.0:0")
+	if err != nil {
+		return quicGateway{}, err
+	}
+	transport := &quic.Transport{Conn: socket}
+	conn, err := transport.Dial(ctx, peer, &tls.Config{ServerName: n.origin.Hostname(), NextProtos: []string{http3.NextProtoH3}, MinVersion: tls.VersionTLS13},
+		&quic.Config{EnableDatagrams: true, HandshakeIdleTimeout: dialTimeout, KeepAlivePeriod: 20 * time.Second})
+	if err != nil {
+		transport.Close()
+		socket.Close()
+		return quicGateway{}, err
+	}
+	return quicGateway{conn: conn, close: func() {
+		conn.CloseWithError(0, "")
 		transport.Close()
 		socket.Close()
 	}}, nil

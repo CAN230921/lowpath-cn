@@ -38,7 +38,7 @@ func main() {
 func run() error {
 	gateway := flag.String("gateway", firstGateway(), "HTTPS MASQUE gateway origin")
 	ip := flag.String("gateway-ip", defaultGatewayIP, "optional IPv4 override, retaining hostname and certificate checks")
-	uplink := flag.String("uplink", defaultUplink, "macOS physical interface for gateway traffic")
+	uplink := flag.String("uplink", defaultUplink, "macOS gateway interface: auto, an interface name, or empty for the system route")
 	data := flag.String("data", "", "desktop settings directory")
 	targetFlag := flag.String("test-target", "", "dedicated UDP test server IPv4:port")
 	route := flag.Bool("test-route", false, "route only the dedicated test host via macOS utun (administrator required)")

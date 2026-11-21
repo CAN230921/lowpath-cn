@@ -17,7 +17,7 @@ go build -o accelerator ./cmd/accelerator
 ./accelerator -gateway https://edge.example.org
 ```
 
-`-gateway` 可通过环境变量 `LOWPATH_GATEWAY` 提供。macOS 如需绑定接入网卡，可以指定 `-uplink en0`。`-gateway-ip` 固定实际连接的 IPv4，TLS 仍按网关域名验证证书。账号由网关管理员开通。macOS 构建启用 CGO 时，选中「在这台设备上保持登录」可在 30 天内重新打开客户端并恢复登录。钥匙串存储续期凭据，主动退出登录时清除并向网关撤销会话。
+`-gateway` 可通过环境变量 `LOWPATH_GATEWAY` 提供。macOS 上可用 `-uplink auto` 让客户端的新 HTTPS 和 MASQUE 连接自动选用物理网卡，或用 `-uplink en0` 指定网卡。`-uplink=""` 使用系统路由。`-gateway-ip` 固定实际连接的 IPv4，可避开 TUN 返回的虚拟 DNS 地址，TLS 仍按网关域名验证证书。账号由网关管理员开通。macOS 构建启用 CGO 时，选中「在这台设备上保持登录」可在 30 天内重新打开客户端并恢复登录。钥匙串存储续期凭据，主动退出登录时清除并向网关撤销会话。
 
 ### Mac UDP 测试
 
