@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -96,40 +97,42 @@ func fastConfig(f *fakeLine) BloatConfig {
 
 func TestBloatTestGradesTheWorseDirection(t *testing.T) {
 	t.Parallel()
-	f := &fakeLine{base: 20 * time.Millisecond, downBloat: 120 * time.Millisecond, upBloat: 10 * time.Millisecond}
-	var phases []string
-	res, err := NewBloatTest(fastConfig(f)).Run(context.Background(), func(p BloatProgress) {
-		if len(phases) == 0 || phases[len(phases)-1] != p.Phase {
-			phases = append(phases, p.Phase)
+	synctest.Test(t, func(t *testing.T) {
+		f := &fakeLine{base: 20 * time.Millisecond, downBloat: 120 * time.Millisecond, upBloat: 10 * time.Millisecond}
+		var phases []string
+		res, err := NewBloatTest(fastConfig(f)).Run(context.Background(), func(p BloatProgress) {
+			if len(phases) == 0 || phases[len(phases)-1] != p.Phase {
+				phases = append(phases, p.Phase)
+			}
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Grade != "C" {
+			t.Fatalf("grade = %q (note %q), want C for +120 ms on download", res.Grade, res.Note)
+		}
+		if res.IdleMS == nil || *res.IdleMS != 20 {
+			t.Fatalf("idle = %v", deref(res.IdleMS))
+		}
+		if res.DownIncreaseMS == nil || *res.DownIncreaseMS != 120 || res.UpIncreaseMS == nil || *res.UpIncreaseMS != 10 {
+			t.Fatalf("increases = %v / %v", deref(res.DownIncreaseMS), deref(res.UpIncreaseMS))
+		}
+		if res.DownMbps == nil || *res.DownMbps < 8 || res.UpMbps == nil || *res.UpMbps < 8 {
+			t.Fatalf("line rate = %v / %v Mbit/s", deref(res.DownMbps), deref(res.UpMbps))
+		}
+		if res.DataMB <= 0 || res.Target != "internet" || res.Gateway != "gateway" || res.Interface != "eth0" || res.Link != LinkEthernet {
+			t.Fatalf("result = %+v", res)
+		}
+		if len(res.Phases) != 4 || res.Phases[0].Gateway == nil || res.Phases[0].Gateway.P50 == nil || *res.Phases[0].Gateway.P50 != 1 {
+			t.Fatalf("phases = %+v", res.Phases)
+		}
+		if p := res.Phases[3].Internet.P50; p == nil || *p != 20 {
+			t.Fatalf("recovery p50 = %v, want back to 20", deref(p))
+		}
+		if got := strings.Join(phases, ","); got != "picking,idle,download,upload,recovery" {
+			t.Fatalf("progress phases = %v", got)
 		}
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.Grade != "C" {
-		t.Fatalf("grade = %q (note %q), want C for +120 ms on download", res.Grade, res.Note)
-	}
-	if res.IdleMS == nil || *res.IdleMS != 20 {
-		t.Fatalf("idle = %v", deref(res.IdleMS))
-	}
-	if res.DownIncreaseMS == nil || *res.DownIncreaseMS != 120 || res.UpIncreaseMS == nil || *res.UpIncreaseMS != 10 {
-		t.Fatalf("increases = %v / %v", deref(res.DownIncreaseMS), deref(res.UpIncreaseMS))
-	}
-	if res.DownMbps == nil || *res.DownMbps < 8 || res.UpMbps == nil || *res.UpMbps < 8 {
-		t.Fatalf("line rate = %v / %v Mbit/s", deref(res.DownMbps), deref(res.UpMbps))
-	}
-	if res.DataMB <= 0 || res.Target != "internet" || res.Gateway != "gateway" || res.Interface != "eth0" || res.Link != LinkEthernet {
-		t.Fatalf("result = %+v", res)
-	}
-	if len(res.Phases) != 4 || res.Phases[0].Gateway == nil || res.Phases[0].Gateway.P50 == nil || *res.Phases[0].Gateway.P50 != 1 {
-		t.Fatalf("phases = %+v", res.Phases)
-	}
-	if p := res.Phases[3].Internet.P50; p == nil || *p != 20 {
-		t.Fatalf("recovery p50 = %v, want back to 20", deref(p))
-	}
-	if got := strings.Join(phases, ","); got != "picking,idle,download,upload,recovery" {
-		t.Fatalf("progress phases = %v", got)
-	}
 }
 
 func TestBloatTestLossUnderLoad(t *testing.T) {
