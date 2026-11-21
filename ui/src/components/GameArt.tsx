@@ -38,7 +38,8 @@ export function ArtImg({ id, kind, className, style, onMissing }: { id: string; 
 }
 
 // GameIcon is the small square picture of a game: the icon of its own
-// program, else a crop of its Steam cover, else a letter tile.
+// program or publisher, else a crop of its cover. It keeps a tile visible
+// while the real image is loading.
 export function GameIcon({ game, size = 32 }: { game: Pick<Game, "id" | "name" | "color">; size?: number }) {
   const order: ArtKind[] = ["icon", "cover"];
   const [i, setI] = useState(() => order.findIndex((k) => hasArt(game.id, k)));
@@ -56,6 +57,7 @@ export function GameIcon({ game, size = 32 }: { game: Pick<Game, "id" | "name" |
           setI(next < 0 ? order.length : next);
         }}
       />
+      <GameTile name={game.name} color={game.color} size={size} />
     </span>
   );
 }

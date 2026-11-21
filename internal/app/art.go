@@ -24,10 +24,10 @@ import (
 )
 
 // Game art: real artwork for the library and the game screen. For Steam
-// games it comes from the user's own Steam client cache, else from Steam's
-// public image CDN (downloaded once, then kept in <data>\art); for any other
-// installed or running game it is the icon inside the game's own .exe.
-// Nothing is bundled with Lowpath, and custom games never touch the network.
+// games it comes from the user's Steam cache or the public Steam CDN. Other
+// built-in games can use a verified publisher image. Installed programs may
+// provide their own icons, and custom games only use local art. The image
+// files are cached in <data>\art rather than bundled with Lowpath.
 
 type artKind struct {
 	local []string // file names in Steam's appcache\librarycache\<appid>
@@ -40,7 +40,7 @@ var artKinds = map[string]artKind{
 	"hero":   {[]string{"library_hero.jpg"}, "library_hero.jpg", ".jpg"},                              // wide banner
 	"logo":   {[]string{"logo.png"}, "logo.png", ".png"},                                              // transparent title logo
 	"header": {[]string{"header.jpg", "library_header.jpg"}, "header.jpg", ".jpg"},                    // 460×215 store header
-	"icon":   {ext: ".png"},                                                                           // from the game's .exe
+	"icon":   {local: []string{"icon.png", "icon.jpg"}, ext: ".png"},
 }
 
 const (
@@ -71,17 +71,25 @@ type artStore struct {
 
 func newArtStore(dir string, log *slog.Logger, games platform.GameDetector, icons platform.IconProvider) *artStore {
 	return &artStore{
-		dir:    dir,
-		log:    log,
-		client: &http.Client{Timeout: 10 * time.Second},
-		steam:  games.SteamRoots,
-		libs:   games.SteamLibraries,
-		games:  games,
-		icons:  icons,
-		files:  map[string]string{},
-		miss:   map[string]time.Time{},
-		keyMu:  map[string]*sync.Mutex{},
-		fetch:  make(chan struct{}, 4),
+		dir: dir,
+		log: log,
+		client: &http.Client{
+			Timeout: 10 * time.Second,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 5 || !validArtURL(req.URL) {
+					return errors.New("art: refusing image redirect")
+				}
+				return nil
+			},
+		},
+		steam: games.SteamRoots,
+		libs:  games.SteamLibraries,
+		games: games,
+		icons: icons,
+		files: map[string]string{},
+		miss:  map[string]time.Time{},
+		keyMu: map[string]*sync.Mutex{},
+		fetch: make(chan struct{}, 4),
 	}
 }
 
@@ -115,9 +123,13 @@ func (a *artStore) path(g Game, kind string) (string, error) {
 	defer km.Unlock()
 	a.mu.Lock()
 	p, done := a.files[key]
+	missed := time.Since(a.miss[key]) < artMissTTL
 	a.mu.Unlock()
 	if done {
 		return p, nil
+	}
+	if missed {
+		return "", errNoArt
 	}
 
 	p, err := a.find(g, kind, k, key)
@@ -133,38 +145,73 @@ func (a *artStore) path(g Game, kind string) (string, error) {
 }
 
 func (a *artStore) find(g Game, kind string, k artKind, key string) (string, error) {
-	cached := filepath.Join(a.dir, safeName(key)+k.ext)
+	base := filepath.Join(a.dir, safeName(key))
 	if a.dir != "" {
-		if fi, err := os.Stat(cached); err == nil && fi.Size() > 0 {
-			return cached, nil
+		for _, ext := range []string{k.ext, ".jpg", ".png", ".webp"} {
+			if cached := base + ext; fileExists(cached) {
+				return cached, nil
+			}
 		}
 	}
 	if kind == "icon" {
-		return a.exeIcon(g, cached)
+		if p, err := a.exeIcon(g, base+".png"); err == nil {
+			return p, nil
+		}
 	}
-	if g.SteamApp == 0 {
+	if g.Custom {
 		return "", errNoArt
 	}
-	// The Steam client already has the art for games the user owns: no
-	// download, and it works offline.
-	if p := a.steamLocal(g.SteamApp, k.local); p != "" {
-		return p, nil
+	preferred := g.art[kind]
+	if g.SteamApp > 0 {
+		names := k.local
+		if u, err := url.Parse(preferred); preferred != "" && err == nil {
+			names = append(slicesClone(names), filepath.Base(u.Path))
+		}
+		if p := a.steamLocal(g.SteamApp, names); p != "" {
+			return p, nil
+		}
 	}
 	if a.dir == "" {
 		return "", errNoArt
 	}
-	b, err := a.download(steamCDN + strconv.Itoa(g.SteamApp) + "/" + k.cdn)
-	if err != nil && kind == "header" {
-		// Newer store pages keep the header under a hashed path; the store
-		// API knows it.
-		if u := a.headerURL(g.SteamApp); u != "" {
-			b, err = a.download(u)
+	if preferred != "" {
+		if p, err := a.cacheImage(base, preferred); err == nil {
+			return p, nil
 		}
 	}
+	if g.SteamApp > 0 && k.cdn != "" {
+		if legacy := steamCDN + strconv.Itoa(g.SteamApp) + "/" + k.cdn; legacy != preferred {
+			if p, err := a.cacheImage(base, legacy); err == nil {
+				return p, nil
+			}
+		}
+		if kind == "header" {
+			if u := a.headerURL(g.SteamApp); u != "" && u != preferred {
+				return a.cacheImage(base, u)
+			}
+		}
+	}
+	return "", errNoArt
+}
+
+func (a *artStore) cacheImage(base, source string) (string, error) {
+	b, err := a.download(source)
 	if err != nil {
 		return "", err
 	}
-	return cached, writeFileAtomic(cached, b)
+	var ext string
+	switch kind := http.DetectContentType(b); kind {
+	case "image/jpeg":
+		ext = ".jpg"
+	case "image/png":
+		ext = ".png"
+	case "image/webp":
+		ext = ".webp"
+	default:
+		return "", fmt.Errorf("art: unexpected %s", kind)
+	}
+	path := base + ext
+	return path, writeFileAtomic(path, b)
 }
 
 // steamLocal looks for one of names in Steam's per-game artwork cache (the
@@ -225,7 +272,7 @@ func (a *artStore) exeIcon(g Game, out string) (string, error) {
 }
 
 func (a *artStore) download(u string) ([]byte, error) {
-	if pu, err := url.Parse(u); err != nil || pu.Scheme != "https" || !steamHost(pu.Hostname()) {
+	if pu, err := url.Parse(u); err != nil || !validArtURL(pu) {
 		return nil, fmt.Errorf("art: refusing %q", u)
 	}
 	a.fetch <- struct{}{}
@@ -245,10 +292,22 @@ func (a *artStore) download(u string) ([]byte, error) {
 	if len(b) > maxArtBytes {
 		return nil, errors.New("art: image too large")
 	}
-	if ct := http.DetectContentType(b); ct != "image/jpeg" && ct != "image/png" {
-		return nil, fmt.Errorf("art: unexpected %s", ct)
-	}
 	return b, nil
+}
+
+func validArtURL(u *url.URL) bool {
+	if u.Scheme != "https" || u.User != nil || (u.Port() != "" && u.Port() != "443") {
+		return false
+	}
+	if steamHost(u.Hostname()) {
+		return true
+	}
+	switch u.Hostname() {
+	case "cmsassets.rgpub.io", "assets-bwa.worldofwarcraft.blizzard.com", "blz-contentstack-images.akamaized.net",
+		"is1-ssl.mzstatic.com", "fastcdn.hoyoverse.com", "robertsspaceindustries.com", "media.robertsspaceindustries.com", "cdn.robertsspaceindustries.com":
+		return true
+	}
+	return false
 }
 
 // headerURL asks the Steam store for an app's header image address.
@@ -354,8 +413,8 @@ func writeFileAtomic(path string, b []byte) error {
 func (a *artStore) warm(ctx context.Context, games []Game) {
 	sem := make(chan struct{}, 4)
 	var wg sync.WaitGroup
-	for _, g := range games {
-		for _, kind := range []string{"cover", "icon"} {
+	for _, kind := range []string{"icon", "cover"} {
+		for _, g := range games {
 			select {
 			case <-ctx.Done():
 				wg.Wait()

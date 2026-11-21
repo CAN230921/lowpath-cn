@@ -15,6 +15,9 @@ import (
 //go:embed games.json
 var gamesJSON []byte
 
+//go:embed game-art.json
+var gameArtJSON []byte
+
 type Game struct {
 	ID        string   `json:"id"`
 	Name      string   `json:"name"`
@@ -32,6 +35,7 @@ type Game struct {
 	// Discovery lists where the game's server list comes from before it
 	// connects: "sdr" = Valve's SDR network config for SteamApp.
 	Discovery []string `json:"discovery,omitempty"`
+	art       map[string]string
 }
 
 // DiscoverySDR marks a game that routes through Valve's Steam Datagram Relay.
@@ -39,8 +43,17 @@ const DiscoverySDR = "sdr"
 
 func LoadCatalog() ([]Game, error) {
 	var g []Game
-	err := json.Unmarshal(gamesJSON, &g)
-	return g, err
+	if err := json.Unmarshal(gamesJSON, &g); err != nil {
+		return nil, err
+	}
+	var artwork map[string]map[string]string
+	if err := json.Unmarshal(gameArtJSON, &artwork); err != nil {
+		return nil, err
+	}
+	for i := range g {
+		g[i].art = artwork[g[i].ID]
+	}
+	return g, nil
 }
 
 // Network answers "which relay paths exist for this game, and where is its

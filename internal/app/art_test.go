@@ -1,9 +1,14 @@
 package app
 
 import (
+	"bytes"
 	"image"
 	"image/color"
+	"image/jpeg"
 	"image/png"
+	"io"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -97,6 +102,60 @@ func TestSteamHostAllowList(t *testing.T) {
 	} {
 		if steamHost(h) != ok {
 			t.Errorf("%s: want %v", h, ok)
+		}
+	}
+}
+
+type artTransport func(*http.Request) (*http.Response, error)
+
+func (f artTransport) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func TestPublisherIconCachesRealImageType(t *testing.T) {
+	fp := newFake(t)
+	dir := t.TempDir()
+	a := newArtStore(dir, discard, fp.Games, fp.Icons)
+	g := Game{ID: "publisher-test", art: map[string]string{"icon": "https://cmsassets.rgpub.io/publisher-icon.jpg"}}
+	var data bytes.Buffer
+	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	img.Set(0, 0, color.RGBA{R: 255, A: 255})
+	if err := jpeg.Encode(&data, img, nil); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	a.client.Transport = artTransport(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if r.URL.String() != g.art["icon"] {
+			t.Fatalf("unexpected icon URL %s", r.URL)
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(data.Bytes()))}, nil
+	})
+	p, err := a.path(g, "icon")
+	if err != nil || filepath.Ext(p) != ".jpg" || calls != 1 {
+		t.Fatalf("publisher icon: %s, %v, requests=%d", p, err, calls)
+	}
+	reopened := newArtStore(dir, discard, fp.Games, fp.Icons)
+	reopened.client.Transport = a.client.Transport
+	if got, err := reopened.path(g, "icon"); err != nil || got != p || calls != 1 {
+		t.Fatalf("reopened cache: %s, %v, requests=%d", got, err, calls)
+	}
+	custom := Game{ID: "custom-art-test", Custom: true, SteamApp: 730, art: g.art}
+	if _, err := reopened.path(custom, "icon"); err != errNoArt || calls != 1 {
+		t.Fatalf("custom game made a remote request: %v, requests=%d", err, calls)
+	}
+}
+
+func TestCatalogArtworkUsesTrustedSources(t *testing.T) {
+	games, err := LoadCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, game := range games {
+		for kind, source := range game.art {
+			u, err := url.Parse(source)
+			_, known := artKinds[kind]
+			if !known || err != nil || !validArtURL(u) {
+				t.Errorf("%s has invalid %s artwork", game.ID, kind)
+			}
 		}
 	}
 }
