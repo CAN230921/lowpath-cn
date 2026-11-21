@@ -28,6 +28,7 @@ interface Props {
 
 export function SettingsModal(props: Props) {
   const { initialTab, settings, relays, platform, version, demo, managed, onChange, onRelaysChanged, onRemap, onClose, onError } = props;
+  const wifiTuningSupported = platform?.os !== "darwin";
   const [tab, setTab] = useState<SettingsTab>(initialTab ?? "network");
   const [saved, setSaved] = useState(false);
 
@@ -164,17 +165,19 @@ export function SettingsModal(props: Props) {
 
           {tab === "relays" && <RelaysPane managed={managed} relays={relays} settings={settings} onSettings={set} onRelaysChanged={onRelaysChanged} />}
 
-          {tab === "diagnostics" && <Diagnostics onError={onError} wifiTuning={settings.wifi_tuning ?? true} />}
+          {tab === "diagnostics" && <Diagnostics onError={onError} wifiTuning={wifiTuningSupported && (settings.wifi_tuning ?? true)} />}
 
           {tab === "optimization" && (
             <>
               <h3>优化</h3>
               <Row
                 t="加速时暂停 Wi-Fi 扫描"
-                d="Wi-Fi 网卡扫描其他网络时可能产生周期性延迟尖峰。加速期间暂停扫描并启用串流模式，结束加速、重连 Wi-Fi 或关闭客户端时恢复。"
+                d={wifiTuningSupported
+                  ? "Wi-Fi 网卡扫描其他网络时可能产生周期性延迟尖峰。加速期间暂停扫描并启用串流模式，结束加速、重连 Wi-Fi 或关闭客户端时恢复。"
+                  : "macOS 的 Wi-Fi 接口提供链路诊断，扫描暂停和串流模式设置不可用。"}
                 icon={<Wifi size={18} />}
               >
-                <Toggle label="加速时暂停 Wi-Fi 扫描" checked={settings.wifi_tuning ?? true} onChange={(v) => set({ wifi_tuning: v })} />
+                <Toggle label="加速时暂停 Wi-Fi 扫描" checked={wifiTuningSupported && (settings.wifi_tuning ?? true)} disabled={!wifiTuningSupported} onChange={(v) => set({ wifi_tuning: v })} />
               </Row>
               <Row t="流量整形" d="优先处理游戏流量。" soon icon={<Gauge size={18} />}>
                 <Toggle label="流量整形" checked={false} disabled onChange={() => {}} />
@@ -219,7 +222,8 @@ const CAPTURE_MODES: { id: CaptureMode; title: string; desc: (os?: string) => st
     title: "路由模式",
     desc: (os) =>
       "自动捕获游戏流量，游戏设置保持原样。" +
-      (os === "linux" ? "需要 root 权限，或 CAP_NET_ADMIN 和 CAP_NET_RAW 能力。" : "需要管理员权限。"),
+      (os === "darwin" ? "需要在系统设置中授权 Lowpath 网络扩展。"
+        : os === "linux" ? "需要 root 权限，或 CAP_NET_ADMIN 和 CAP_NET_RAW 能力。" : "需要管理员权限。"),
   },
   {
     id: "proxy",

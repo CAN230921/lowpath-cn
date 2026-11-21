@@ -6,9 +6,8 @@ import (
 	"net/netip"
 )
 
-// FlowEvent is one packet, or one send or receive call, between a local
-// process and a remote endpoint, as the OS reports it: addresses, ports and
-// size only, never the payload.
+// FlowEvent is packet or socket activity between a local process and a
+// remote endpoint. It contains only the addresses, ports and byte count.
 type FlowEvent struct {
 	PID      uint32
 	Proto    string // "udp" or "tcp"

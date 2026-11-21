@@ -220,6 +220,9 @@ func wifiState(err error) (state, message string) {
 		}
 		return wifiNone, msg
 	case errors.Is(err, diag.ErrLocationDenied):
+		if message := detail(err, diag.ErrLocationDenied); message != "" {
+			return wifiLocation, message
+		}
 		return wifiLocation, "Windows shares the access point's load and the nearby networks only with apps allowed to use your location. " +
 			"Turn on Settings → Privacy & security → Location → \"Let desktop apps access your location\", then try again. Lowpath doesn't read or keep your location."
 	case errors.Is(err, diag.ErrUnsupported):

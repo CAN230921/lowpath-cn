@@ -64,6 +64,10 @@ func TestNativeIsComplete(t *testing.T) {
 		if want := p.Privileges.CanElevate() && !p.Privileges.Elevated() && errors.Is(err, capture.ErrNeedAdmin); p.ElevationHelps() != want {
 			t.Errorf("ElevationHelps = %v, want %v", p.ElevationHelps(), want)
 		}
+	case "darwin":
+		if p.Capture.Name() == "network-extension" && err == nil {
+			t.Error("unbundled macOS test binary reported an installed network extension")
+		}
 	default:
 		if !errors.Is(err, errors.ErrUnsupported) {
 			t.Errorf("capture on %s: %v, want errors.ErrUnsupported", runtime.GOOS, err)
@@ -92,8 +96,10 @@ func TestNativeIsComplete(t *testing.T) {
 			t.Errorf("Relaunch: %v, want errors.ErrUnsupported", err)
 		}
 	}
-	if _, err := p.Flows.Watch(nil); !errors.Is(err, errors.ErrUnsupported) {
-		t.Errorf("flow watch on %s: %v, want errors.ErrUnsupported", runtime.GOOS, err)
+	if runtime.GOOS != "darwin" {
+		if _, err := p.Flows.Watch(nil); !errors.Is(err, errors.ErrUnsupported) {
+			t.Errorf("flow watch on %s: %v, want errors.ErrUnsupported", runtime.GOOS, err)
+		}
 	}
 	// No Windows services or program list to look through for boosters;
 	// adapters (for full-tunnel VPNs) are read.

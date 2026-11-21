@@ -19,6 +19,18 @@ go build -o accelerator ./cmd/accelerator
 
 `-gateway` 可通过环境变量 `LOWPATH_GATEWAY` 提供。macOS 上可用 `-uplink auto` 让客户端的新 HTTPS 和 MASQUE 连接自动选用物理网卡，或用 `-uplink en0` 指定网卡。`-uplink=""` 使用系统路由。`-gateway-ip` 固定实际连接的 IPv4，可避开 TUN 返回的虚拟 DNS 地址，TLS 仍按网关域名验证证书。账号由网关管理员开通。macOS 构建启用 CGO 时，选中「在这台设备上保持登录」可在 30 天内重新打开客户端并恢复登录。钥匙串存储续期凭据，主动退出登录时清除并向网关撤销会话。
 
+## macOS
+
+启用 CGO 构建时，Mac 客户端通过 CoreWLAN 读取 Wi-Fi 信号、频段、信道和发送速率，并从 macOS `.app` 读取本机游戏图标。加速前的服务器识别通过系统的连接统计读取 TCP 和已连接 UDP 套接字的活动。信道调查读取系统已有的扫描缓存，可能需要定位授权。macOS 没有 Lowpath 在 Windows 上使用的扫描暂停和串流模式开关。
+
+Mac 本机版可以用 `codesign --force --sign - "Lowpath CN.app"` 自签。自签包支持账号、游戏库、诊断和指定目标的代理测试。按游戏进程接管 IPv4 UDP 的网络扩展要求 macOS 15 或更新版本，以及 Apple 授予的网络扩展权限。用 Developer ID 分发时，先构建桌面程序和 `.app`，再对暂存应用运行以下命令。
+
+```sh
+scripts/macapp/sign-routing.sh 'Lowpath CN.app' 'Developer ID Application: …' TEAM_ID App.provisionprofile Route.provisionprofile
+```
+
+主应用和后缀为 `.routing` 的扩展需使用同一团队的 Developer ID 配置文件与同一应用组 `TEAM_ID.<主应用 Bundle ID>`。打包后按 Apple 流程公证，将应用放在「应用程序」目录。首次开始路由会话时在系统设置中批准扩展。扩展已编译并测试本地收发桥接，系统激活和真实游戏流量仍需具备权限的签名包验证。
+
 ### Mac UDP 测试
 
 使用自有的 UDP 回显服务器作为测试目标。启动后登录客户端，选中「UDP 线路实测」，选择已授权节点并点击「加速」。
@@ -27,7 +39,7 @@ go build -o accelerator ./cmd/accelerator
 ./accelerator -gateway https://edge.example.org -test-target 203.0.113.12:42319
 ```
 
-代理模式下，将测试程序连接到界面显示的本地 UDP 地址。该模式已在 Mac 上通过公网 MASQUE 和 AWS 验证。开发用 `-test-route` 需要管理员权限和与测试目标不同的 `-gateway-ip`，以临时 utun 主机路由接管专用测试服务器。系统路由模式仍在验收，设计范围为专用测试 IPv4 地址和指定的 UDP 端口。
+代理模式下，将测试程序连接到界面显示的本地 UDP 地址。该模式已在 Mac 上通过公网 MASQUE 和 AWS 验证。开发用 `-test-route` 需要管理员权限和与测试目标不同的 `-gateway-ip`，以临时 utun 主机路由接管指定测试 IPv4 地址和 UDP 端口。
 
 ## Windows x64
 

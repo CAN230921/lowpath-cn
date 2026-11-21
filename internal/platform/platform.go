@@ -74,9 +74,9 @@ type GameDetector interface {
 // name the server a game is on when Lowpath isn't routing it (and next to
 // anti-cheats that refuse a packet driver).
 type FlowWatcher interface {
-	// Watch calls onEvent for every UDP and TCP send and receive of every
-	// process until the watch is closed. onEvent runs on the OS's event
-	// thread and must return quickly. Errors match detect.ErrNeedAdmin when
+	// Watch calls onEvent for UDP and TCP activity reported by the OS
+	// until the watch is closed. The callback must return quickly.
+	// Errors match detect.ErrNeedAdmin when
 	// the OS wants administrator rights, or errors.ErrUnsupported on a
 	// system without a watcher yet.
 	Watch(onEvent func(detect.FlowEvent)) (detect.FlowWatch, error)

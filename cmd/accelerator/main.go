@@ -31,6 +31,12 @@ import (
 var defaultGateway, defaultGatewayIP, defaultUplink string
 
 func main() {
+	if isRouteController() {
+		if err := runRouteController(); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	if err := run(); err != nil {
 		if runtime.GOOS == "windows" && flag.Lookup("headless").Value.String() == "false" {
 			platform.NewDesktop(platform.DesktopConfig{}).ShowError("Lowpath", "无法启动加速器。\n\n"+err.Error())
