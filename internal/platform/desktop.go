@@ -14,6 +14,7 @@ import (
 type Desktop interface {
 	// RunWindow shows url in an app window and returns when the user has
 	// closed every window it opened, or ctx has ended (it then closes them).
+	// A window kept in the notification area is still open.
 	// It fails at once, with an error matching ErrNoWindow, when this system
 	// can't show one, so the caller can open the browser instead.
 	RunWindow(ctx context.Context, url string) error
@@ -45,7 +46,10 @@ type DesktopConfig struct {
 	// Icon is the app icon as a 256×256 PNG, for windows and the app menu
 	// on systems that take it from a file.
 	Icon []byte
-	Log  *slog.Logger
+	// MinimizeToTray reads the current preference on Windows each time the
+	// user closes or minimizes the window. Nil uses normal window behavior.
+	MinimizeToTray func() bool
+	Log            *slog.Logger
 }
 
 // Instance keeps Lowpath to one running copy per user and UI address: a

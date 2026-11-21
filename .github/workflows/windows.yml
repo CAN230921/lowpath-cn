@@ -55,6 +55,9 @@ jobs:
       - name: Test Windows client
         run: go test -short ./...
 
+      - name: Verify notification-area behavior
+        run: go test -short -v -run '^TestWindowTray' ./internal/platform
+
       - name: Build Lowpath.exe
         run: |
           go run github.com/tc-hib/go-winres@v0.3.3 make --in cmd/lowpath/winres/winres.json --arch amd64 --out cmd/accelerator/rsrc

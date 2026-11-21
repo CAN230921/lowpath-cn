@@ -38,8 +38,9 @@ var (
 // WebView2 is the Windows desktop: the UI in a WebView2 window of this
 // process, the default browser through the shell, errors in a message box.
 type WebView2 struct {
-	profile string
-	log     *slog.Logger
+	profile        string
+	minimizeToTray func() bool
+	log            *slog.Logger
 
 	mu   sync.Mutex
 	open bool
@@ -51,7 +52,7 @@ func NewDesktop(cfg DesktopConfig) Desktop {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &WebView2{profile: cfg.ProfileDir, log: log}
+	return &WebView2{profile: cfg.ProfileDir, minimizeToTray: cfg.MinimizeToTray, log: log}
 }
 
 // RunWindow shows url in a WebView2 window on this OS thread. It fails at
@@ -75,6 +76,14 @@ func (d *WebView2) RunWindow(ctx context.Context, url string) error {
 	})
 	if wv == nil {
 		return fmt.Errorf("%w: could not create the WebView2 window", ErrNoWindow)
+	}
+	if d.minimizeToTray != nil {
+		tray, err := attachWindowTray(ctx, uintptr(wv.Window()), d.minimizeToTray, notifyTrayIcon)
+		if err != nil {
+			d.log.Warn("system tray unavailable", "err", err)
+		} else {
+			defer tray.detach()
+		}
 	}
 	wv.SetSize(min(int(minWidth*scale), w), min(int(minHeight*scale), h), webview2.HintMin)
 	wv.Navigate(url)

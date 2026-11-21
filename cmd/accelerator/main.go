@@ -127,7 +127,11 @@ func run() error {
 			return err
 		}
 	}
-	desktop := platform.NewDesktop(platform.DesktopConfig{ProfileDir: filepath.Join(*data, "webview"), Icon: winres.Icon})
+	desktop := platform.NewDesktop(platform.DesktopConfig{
+		ProfileDir:     filepath.Join(*data, "webview"),
+		Icon:           winres.Icon,
+		MinimizeToTray: func() bool { return store.Settings().MinimizeToTray },
+	})
 	login := &managed.Login{Network: network}
 	if !*credential && !*route {
 		login.Store = network.SystemCredentialStore()

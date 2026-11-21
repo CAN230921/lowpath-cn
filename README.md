@@ -47,6 +47,8 @@ scripts/macapp/sign-routing.sh 'Lowpath CN.app' 'Developer ID Application: …' 
 
 构建预填香港托管网关，首次打开时用管理员发放的账号登录。路由模式使用内置的 WinDivert 驱动，需要 Windows 管理员权限。可直接右键以管理员身份启动，或在应用里按提示授权并重启。桌面窗口使用 WebView2，缺少运行时时会在默认浏览器打开界面。
 
+关闭或最小化桌面窗口后，Lowpath 默认继续在系统托盘运行和加速。点击托盘图标恢复窗口，右键选择「退出」停止加速并结束客户端。可在「设置 → 通用」关闭驻留。
+
 ## 部署网关与创建账号
 
 在 `gateway/` 构建 `./cmd/edge` 和 `./cmd/access`，参考 `gateway/units/` 的 systemd 模板。网关使用 `EDGE_DOMAIN`、systemd 状态目录及凭据目录。通过 `EDGE_DEVICE_DIR` 启用托管节点，systemd 凭据 `routes` 提供节点和中继配置。

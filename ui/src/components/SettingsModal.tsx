@@ -93,9 +93,11 @@ export function SettingsModal(props: Props) {
               <Row t="随 Windows 启动" d="登录 Windows 后自动启动 Lowpath。" soon>
                 <Toggle label="开机启动" checked={false} disabled onChange={() => {}} />
               </Row>
-              <Row t="最小化到系统托盘" d="关闭窗口后继续在系统托盘运行。" soon>
-                <Toggle label="最小化到系统托盘" checked={false} disabled onChange={() => {}} />
-              </Row>
+              {platform?.os === "windows" && managed && (
+                <Row t="驻留系统托盘" d="关闭或最小化桌面窗口后继续加速。点托盘图标恢复窗口，右键可退出。">
+                  <Toggle label="驻留系统托盘" checked={settings.minimize_to_tray} onChange={(v) => set({ minimize_to_tray: v })} />
+                </Row>
+              )}
               <Row t="语言" d="当前界面语言。">
                 <span className="chip">简体中文</span>
               </Row>
