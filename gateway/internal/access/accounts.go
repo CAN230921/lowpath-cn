@@ -11,11 +11,16 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/argon2"
 )
 
-const DefaultAccountDir = "/etc/lowpath-access/accounts"
+const (
+	DefaultAccountDir = "/etc/lowpath-access/accounts"
+	MinPasswordLength = 8
+	MaxPasswordBytes  = 256
+)
 
 var accountName = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{2,31}$`)
 
@@ -28,7 +33,9 @@ type Account struct {
 
 func NormalizeAccount(name string) string { return strings.ToLower(strings.TrimSpace(name)) }
 func ValidAccount(name string) bool       { return accountName.MatchString(name) }
-func ValidPassword(password []byte) bool  { return len(password) >= 12 && len(password) <= 256 }
+func ValidPassword(password []byte) bool {
+	return len(password) <= MaxPasswordBytes && utf8.Valid(password) && utf8.RuneCount(password) >= MinPasswordLength
+}
 
 func passwordHash(password, salt []byte) []byte {
 	return argon2.IDKey(password, salt, 3, 64*1024, 1, 32)
@@ -39,7 +46,7 @@ func passwordHash(password, salt []byte) []byte {
 func CreateAccount(dir, name string, password []byte, nodes []string) error {
 	name = NormalizeAccount(name)
 	if !ValidAccount(name) || !ValidPassword(password) || len(nodes) == 0 {
-		return errors.New("create an account with 3–32 valid name characters, a 12–256 byte password and at least one node")
+		return errors.New("create an account with 3–32 valid name characters, a password of at least 8 characters and at most 256 bytes, and at least one node")
 	}
 	for _, node := range nodes {
 		if !ValidNode(node) {

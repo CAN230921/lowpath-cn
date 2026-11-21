@@ -37,7 +37,7 @@ func TestPasswordLoginRequiresOwnerAccount(t *testing.T) {
 		}
 		return w
 	}
-	const password = "server-test-fixture-only"
+	const password = "eight-7!"
 	const endpoint = "/api/v1/login/password"
 	const body = `{"username":"player","password":"` + password + `"}`
 	call("POST", "/api/v1/login/register", "", body, 404)

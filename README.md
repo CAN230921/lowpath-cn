@@ -36,7 +36,7 @@ Windows 客户端计划复用同一套 React 界面和托管节点 API。参阅 
 在 `gateway/` 构建 `./cmd/edge` 和 `./cmd/access`，参考 `gateway/units/` 的 systemd 模板。网关使用 `EDGE_DOMAIN`、systemd 状态目录及凭据目录。通过 `EDGE_DEVICE_DIR` 启用托管节点，systemd 凭据 `routes` 提供节点和中继配置。
 
 - 启用账号登录时，在网关创建只供服务读取的系统组 `lowpath-auth`，以及 root 所有的 setgid 账号目录。将 `gateway/units/lowpath-masque-accounts.conf` 放入服务的 systemd drop-in 目录，重载后重启网关。
-- 新账号只能通过管理员终端创建。命令会隐藏密码输入，网关只保存 Argon2id 密码散列和允许访问的节点。
+- 新账号只能通过管理员终端创建。密码至少 8 个字符、最多 256 字节。命令会隐藏密码输入，网关只保存 Argon2id 密码散列和允许访问的节点。
 - 登录后，客户端向 `GET /api/v1/nodes` 和 CONNECT-UDP 发送有效期 12 小时的设备凭据。退出登录可撤销该设备会话。
 
 ```sh

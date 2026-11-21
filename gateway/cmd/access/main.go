@@ -89,7 +89,7 @@ func createUser(dir, name string, nodes []string) error {
 	if !term.IsTerminal(fd) {
 		return errors.New("use an interactive administrator terminal to enter the password")
 	}
-	fmt.Fprint(os.Stderr, "Password (12–256 bytes, input hidden): ")
+	fmt.Fprintf(os.Stderr, "Password (at least %d characters, at most %d bytes, input hidden): ", access.MinPasswordLength, access.MaxPasswordBytes)
 	password, err := term.ReadPassword(fd)
 	fmt.Fprintln(os.Stderr)
 	if err != nil {
@@ -97,7 +97,7 @@ func createUser(dir, name string, nodes []string) error {
 	}
 	defer clear(password)
 	if !access.ValidPassword(password) {
-		return errors.New("password must be 12–256 bytes")
+		return fmt.Errorf("password must be at least %d characters and at most %d bytes", access.MinPasswordLength, access.MaxPasswordBytes)
 	}
 	fmt.Fprint(os.Stderr, "Confirm password: ")
 	confirmation, err := term.ReadPassword(fd)
