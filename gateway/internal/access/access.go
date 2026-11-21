@@ -1,6 +1,7 @@
 package access
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
@@ -20,10 +21,11 @@ var (
 )
 
 type Device struct {
-	Label     string    `json:"label"`
-	Digest    string    `json:"sha256"`
-	Nodes     []string  `json:"nodes"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Label           string    `json:"label"`
+	Digest          string    `json:"sha256"`
+	Nodes           []string  `json:"nodes"`
+	ExpiresAt       time.Time `json:"expires_at"`
+	AccountRevision string    `json:"account_revision,omitempty"`
 }
 
 type Grant struct {
@@ -35,6 +37,51 @@ func ValidNode(id string) bool   { return nodeID.MatchString(id) }
 func ValidDevice(id string) bool { return deviceID.MatchString(id) }
 
 func Path(dir, id string) string { return filepath.Join(dir, id+".json") }
+
+// IssueDevice persists the credential's digest and returns its bearer value once.
+func IssueDevice(dir string, device Device, mode os.FileMode) (string, error) {
+	var idBytes [12]byte
+	var secretBytes [32]byte
+	rand.Read(idBytes[:])
+	rand.Read(secretBytes[:])
+	id, secret := hex.EncodeToString(idBytes[:]), hex.EncodeToString(secretBytes[:])
+	digest := sha256.Sum256([]byte(secret))
+	device.Digest = hex.EncodeToString(digest[:])
+	if err := writeRecord(dir, id, device, mode); err != nil {
+		return "", err
+	}
+	return id + "." + secret, nil
+}
+
+func writeRecord(dir, id string, record any, mode os.FileMode) error {
+	file, err := os.CreateTemp(dir, ".record-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	defer file.Close()
+	if err := json.NewEncoder(file).Encode(record); err != nil {
+		return err
+	}
+	if err := file.Chmod(mode); err != nil {
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	if err := os.Link(file.Name(), Path(dir, id)); err != nil {
+		return err
+	}
+	directory, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
+	return directory.Sync()
+}
 
 func Authenticate(dir, header string, now time.Time) (Grant, bool) {
 	token, ok := strings.CutPrefix(header, "Bearer ")

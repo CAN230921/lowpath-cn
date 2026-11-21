@@ -113,7 +113,7 @@ func run() error {
 		}
 	}
 	desktop := platform.NewDesktop(platform.DesktopConfig{ProfileDir: filepath.Join(*data, "webview")})
-	login := &managed.Login{Network: network, OpenBrowser: desktop.OpenBrowser}
+	login := &managed.Login{Network: network}
 	svc, err := app.NewServer(app.Config{Store: store, Games: games, Network: network, Platform: plat,
 		UI: assets, ArtDir: filepath.Join(*data, "art"), Marker: capture.NewMarkerFile(filepath.Join(*data, "capture.json")), ExtraAPI: login.Mount})
 	if err != nil {

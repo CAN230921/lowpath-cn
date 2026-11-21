@@ -53,7 +53,7 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		if err := regional.configureGitHub(host, filepath.Join(credentials, "github-oauth"), filepath.Join(state, "oauth-devices")); err != nil {
+		if err := regional.configurePasswords(os.Getenv("EDGE_ACCOUNT_DIR"), filepath.Join(state, "password-devices")); err != nil {
 			return err
 		}
 	}

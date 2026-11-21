@@ -13,7 +13,7 @@ IDEA.docx
 /.ci/
 *.tsbuildinfo
 # User configuration, device credentials and separately obtained drivers.
-github-oauth.json
+accounts/
 *.local.json
 *.pem
 *.key

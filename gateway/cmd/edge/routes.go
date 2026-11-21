@@ -39,13 +39,13 @@ type node struct {
 }
 
 type routes struct {
-	oauth    *githubLogin
-	nodes    []*node
-	byTarget map[string]*node
-	devices  string
-	sessions chan struct{}
-	mu       sync.Mutex
-	active   map[string]int
+	passwords *passwordLogin
+	nodes     []*node
+	byTarget  map[string]*node
+	devices   string
+	sessions  chan struct{}
+	mu        sync.Mutex
+	active    map[string]int
 }
 
 func loadRoutes(path, devices string) (*routes, error) {
@@ -142,8 +142,8 @@ func unauthorized(w http.ResponseWriter) {
 }
 
 func (rt *routes) mount(mux *http.ServeMux, host string) {
-	if rt.oauth != nil {
-		rt.oauth.mount(mux)
+	if rt.passwords != nil {
+		rt.passwords.mount(mux)
 	}
 	templateURL := "https://" + host + routeTemplate
 	template := uritemplate.MustNew(templateURL)
@@ -220,14 +220,17 @@ func (rt *routes) mount(mux *http.ServeMux, host string) {
 
 func (rt *routes) authenticate(header string, now time.Time) (access.Grant, bool) {
 	grant, ok := access.Authenticate(rt.devices, header, now)
-	if !ok && rt.oauth != nil {
-		return access.Authenticate(rt.oauth.dir, header, now)
+	if !ok && rt.passwords != nil {
+		return rt.passwords.authorize(header, now)
 	}
 	return grant, ok
 }
 
 func (rt *routes) stillValid(grant access.Grant, node string, now time.Time) bool {
-	return grant.StillValid(rt.devices, node, now) || (rt.oauth != nil && grant.StillValid(rt.oauth.dir, node, now))
+	if grant.AccountRevision != "" {
+		return rt.passwords != nil && rt.passwords.stillValid(grant, node, now)
+	}
+	return grant.StillValid(rt.devices, node, now)
 }
 
 func (rt *routes) reserve(id string) bool {

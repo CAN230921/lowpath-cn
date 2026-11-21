@@ -1,19 +1,16 @@
 package main
 
 import (
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
+	"golang.org/x/term"
 	"lowpath-masque-edge/internal/access"
 )
 
@@ -28,11 +25,22 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: lowpath-access issue|revoke [options]")
+		return errors.New("usage: lowpath-access create-user|issue|revoke [options]")
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	dir := flags.String("dir", defaultDir, "device registry directory")
 	switch args[0] {
+	case "create-user":
+		username := flags.String("username", "", "account name")
+		nodes := flags.String("nodes", "", "comma-separated node IDs")
+		accounts := flags.String("account-dir", access.DefaultAccountDir, "account registry directory")
+		if err := flags.Parse(args[1:]); err != nil {
+			return err
+		}
+		if flags.NArg() != 0 || *username == "" || *nodes == "" {
+			return errors.New("usage: sudo lowpath-access create-user -username NAME -nodes NODE[,NODE]")
+		}
+		return createUser(*accounts, *username, strings.Split(*nodes, ","))
 	case "issue":
 		label := flags.String("label", "", "device label")
 		nodes := flags.String("nodes", "", "comma-separated node IDs")
@@ -50,7 +58,7 @@ func run(args []string) error {
 		}
 		return os.Remove(access.Path(*dir, flags.Arg(0)))
 	default:
-		return errors.New("usage: lowpath-access issue|revoke [options]")
+		return errors.New("usage: lowpath-access create-user|issue|revoke [options]")
 	}
 }
 
@@ -65,44 +73,45 @@ func issue(dir, label string, nodes []string, ttl time.Duration) error {
 	}
 	slices.Sort(nodes)
 	nodes = slices.Compact(nodes)
-	var secret [32]byte
-	var idBytes [12]byte
-	rand.Read(idBytes[:])
-	rand.Read(secret[:])
-	id := hex.EncodeToString(idBytes[:])
-	value := hex.EncodeToString(secret[:])
-	digest := sha256.Sum256([]byte(value))
-	dev := access.Device{Label: label, Digest: hex.EncodeToString(digest[:]), Nodes: nodes, ExpiresAt: time.Now().UTC().Add(ttl)}
+	value, err := access.IssueDevice(dir, access.Device{Label: label, Nodes: nodes, ExpiresAt: time.Now().UTC().Add(ttl)}, 0644)
+	if err != nil {
+		return err
+	}
+	fmt.Println(value)
+	return nil
+}
 
-	file, err := os.CreateTemp(dir, ".device-*")
+func createUser(dir, name string, nodes []string) error {
+	if os.Geteuid() != 0 {
+		return errors.New("only the gateway administrator can create an account")
+	}
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		return errors.New("use an interactive administrator terminal to enter the password")
+	}
+	fmt.Fprint(os.Stderr, "Password (12–256 bytes, input hidden): ")
+	password, err := term.ReadPassword(fd)
+	fmt.Fprintln(os.Stderr)
 	if err != nil {
 		return err
 	}
-	defer os.Remove(file.Name())
-	defer file.Close()
-	if err := json.NewEncoder(file).Encode(dev); err != nil {
-		return err
+	defer clear(password)
+	if !access.ValidPassword(password) {
+		return errors.New("password must be 12–256 bytes")
 	}
-	if err := file.Chmod(0644); err != nil {
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		return err
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	if err := os.Link(file.Name(), access.Path(dir, id)); err != nil {
-		return err
-	}
-	directory, err := os.Open(filepath.Clean(dir))
+	fmt.Fprint(os.Stderr, "Confirm password: ")
+	confirmation, err := term.ReadPassword(fd)
+	fmt.Fprintln(os.Stderr)
 	if err != nil {
 		return err
 	}
-	defer directory.Close()
-	if err := directory.Sync(); err != nil {
+	defer clear(confirmation)
+	if !bytes.Equal(password, confirmation) {
+		return errors.New("passwords did not match")
+	}
+	if err := access.CreateAccount(dir, name, password, nodes); err != nil {
 		return err
 	}
-	fmt.Println(id + "." + value)
+	fmt.Printf("Created account %s\n", access.NormalizeAccount(name))
 	return nil
 }

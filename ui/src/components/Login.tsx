@@ -1,59 +1,24 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { KeyRound, Loader2 } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { Loader2 } from "lucide-react";
 import { api, ApiError } from "../api";
 import { Logo } from "./Bits";
 
 export function Login({ onSuccess }: { onSuccess: () => void }) {
-  const [credential, setCredential] = useState("");
-  const [useDevice, setUseDevice] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!pending) return;
-    let disposed = false;
-    let timer: number;
-    const next = () => { timer = window.setTimeout(poll, 1800); };
-    const poll = async () => {
-      try {
-        const result = await api.pollLogin();
-        if (disposed) return;
-        if ("pending" in result) next();
-        else if (result.signed_in) onSuccess();
-      } catch (e) {
-        if (disposed) return;
-        setPending(false);
-        setError(e instanceof ApiError ? e.message : "无法确认 GitHub 登录状态。");
-      }
-    };
-    next();
-    return () => { disposed = true; window.clearTimeout(timer); };
-  }, [pending, onSuccess]);
-
-  const github = async () => {
-    setBusy(true);
-    setError("");
-    try {
-      await api.githubLogin();
-      setPending(true);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "无法启动 GitHub 登录。");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const device = async (event: FormEvent) => {
+  const signIn = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setError("");
     try {
-      await api.deviceLogin(credential.trim());
-      setCredential("");
+      await api.passwordLogin(username.trim(), password);
+      setPassword("");
       onSuccess();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "设备登录失败。");
+      setError(e instanceof ApiError ? e.message : "登录失败，请重试。");
     } finally {
       setBusy(false);
     }
@@ -64,26 +29,16 @@ export function Login({ onSuccess }: { onSuccess: () => void }) {
       <section className="mapping-inner login" aria-labelledby="login-title">
         <div className="brand"><Logo />Lowpath</div>
         <h1 id="login-title">登录加速器</h1>
-        {pending ? (
-          <>
-            <p role="status"><Loader2 size={15} className="spin" /> 请在浏览器完成授权，再回到客户端。</p>
-            <button className="btn" onClick={() => setPending(false)}>取消等待</button>
-          </>
-        ) : (
-          <>
-            <button className="btn btn-primary" disabled={busy} onClick={github}>使用 GitHub 登录</button>
-            <button className="btn btn-ghost" disabled={busy} onClick={() => setUseDevice(!useDevice)} aria-expanded={useDevice}>
-              <KeyRound size={15} />使用设备凭据
-            </button>
-            {useDevice && (
-              <form onSubmit={device}>
-                <label htmlFor="device-credential">设备凭据</label>
-                <input id="device-credential" type="password" autoComplete="off" spellCheck={false} value={credential} onChange={(e) => setCredential(e.target.value)} required />
-                <button className="btn" disabled={busy || !credential.trim()}>登录</button>
-              </form>
-            )}
-          </>
-        )}
+        <form onSubmit={signIn}>
+          <label htmlFor="login-username">账号</label>
+          <input id="login-username" autoComplete="username" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} maxLength={32} disabled={busy} required />
+          <label htmlFor="login-password">密码</label>
+          <input id="login-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={256} disabled={busy} required />
+          <button className="btn btn-primary" disabled={busy || !username.trim() || !password}>
+            {busy && <Loader2 size={15} className="spin" />}{busy ? "正在登录…" : "登录"}
+          </button>
+          <p className="muted">账号由管理员开通。</p>
+        </form>
         {error && <p className="form-error" role="alert">{error}</p>}
       </section>
     </main>
